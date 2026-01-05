@@ -210,6 +210,29 @@ secure_download_run() {
     fi
 }
 
+# Retry download with exponential backoff
+retry_download() {
+    local url="$1"
+    local dest="$2"
+    local max_retries="${3:-3}"
+    local retry=0
+
+    while [ $retry -lt $max_retries ]; do
+        if curl --proto '=https' --tlsv1.2 -fsSL "$url" -o "$dest" 2>/dev/null; then
+            return 0
+        fi
+        retry=$((retry + 1))
+        if [ $retry -lt $max_retries ]; then
+            local wait_time=$((2 ** retry))
+            print_warning "Download failed, retry $retry/$max_retries in ${wait_time}s..."
+            sleep $wait_time
+        fi
+    done
+
+    print_error "Download failed after $max_retries attempts: $url"
+    return 1
+}
+
 # Sudo wrapper - uses cached credentials
 do_sudo() {
     sudo "$@"
@@ -711,9 +734,9 @@ install_nerd_font() {
 ################################################################################
 
 install_ohmyposh_theme() {
-    # Copy Oh My Posh theme from repo (catppuccin_mocha.omp.json)
+    # Copy Oh My Posh theme from repo (dotfiles/ohmyposh/catppuccin_mocha.omp.json)
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local theme_src="$script_dir/catppuccin_mocha.omp.json"
+    local theme_src="$script_dir/dotfiles/ohmyposh/catppuccin_mocha.omp.json"
     local theme_dst="$HOME/.config/ohmyposh/catppuccin_mocha.omp.json"
 
     mkdir -p "$HOME/.config/ohmyposh"
@@ -1130,11 +1153,13 @@ install_go_env() {
     GO_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -1)
     ARCH=$(dpkg --print-architecture)
 
-    # Download and install
-    wget "https://go.dev/dl/${GO_VERSION}.linux-${ARCH}.tar.gz"
+    # Download and install (using temp directory for safety)
+    local tmp_dir=$(mktemp -d)
+    trap "rm -rf '$tmp_dir'" RETURN
+
+    wget -O "$tmp_dir/go.tar.gz" "https://go.dev/dl/${GO_VERSION}.linux-${ARCH}.tar.gz"
     do_sudo rm -rf /usr/local/go
-    do_sudo tar -C /usr/local -xzf ${GO_VERSION}.linux-${ARCH}.tar.gz
-    rm ${GO_VERSION}.linux-${ARCH}.tar.gz
+    do_sudo tar -C /usr/local -xzf "$tmp_dir/go.tar.gz"
 
     # Configure environment
     if ! grep -q "GOROOT" ~/.zshrc; then
@@ -1597,10 +1622,14 @@ install_k8s_tools() {
 
     print_header "Installing Kubernetes tools"
 
-    # kubectl
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    do_sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    rm kubectl
+    # kubectl (with architecture detection)
+    local K8S_ARCH=$(dpkg --print-architecture)
+    local K8S_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+    local tmp_dir=$(mktemp -d)
+    trap "rm -rf '$tmp_dir'" RETURN
+
+    retry_download "https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/${K8S_ARCH}/kubectl" "$tmp_dir/kubectl"
+    do_sudo install -o root -g root -m 0755 "$tmp_dir/kubectl" /usr/local/bin/kubectl
 
     if ! grep -q "kubectl completion zsh" ~/.zshrc; then
         cat >> ~/.zshrc << 'EOF'
@@ -2300,6 +2329,105 @@ show_ssh_key_info() {
 }
 
 ################################################################################
+# INSTALLATION VERIFICATION
+################################################################################
+
+verify_installation() {
+    print_header "Installation Verification"
+
+    local passed=0
+    local failed=0
+    local warnings=0
+
+    # Check essential commands
+    print_info "Checking installed commands..."
+    local cmds=("zsh" "git" "python3" "node" "npm" "go" "cargo" "oh-my-posh" "fzf" "eza" "bat" "fd" "rg" "zoxide" "btop")
+    for cmd in "${cmds[@]}"; do
+        if command_exists "$cmd"; then
+            local version=$($cmd --version 2>&1 | head -1 | cut -c1-50)
+            print_success "$cmd: $version"
+            passed=$((passed + 1))
+        else
+            print_error "$cmd: NOT FOUND"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Check optional commands (warning only)
+    print_info "Checking optional commands..."
+    local opt_cmds=("docker" "kubectl" "helm" "lazygit" "lazydocker" "atuin" "bun" "pwsh" "claude")
+    for cmd in "${opt_cmds[@]}"; do
+        if command_exists "$cmd"; then
+            local version=$($cmd --version 2>&1 | head -1 | cut -c1-50)
+            print_success "$cmd: $version"
+            passed=$((passed + 1))
+        else
+            print_warning "$cmd: not installed (optional)"
+            warnings=$((warnings + 1))
+        fi
+    done
+
+    # Check config files
+    print_info "Checking configuration files..."
+    local configs=(
+        "$HOME/.zshrc:Zsh configuration"
+        "$HOME/.config/ohmyposh/catppuccin_mocha.omp.json:Oh My Posh theme"
+        "$HOME/.tmux.conf:Tmux configuration"
+        "$HOME/.gitconfig:Git configuration"
+        "$HOME/.ssh/config:SSH configuration"
+    )
+    for cfg_entry in "${configs[@]}"; do
+        local cfg_path="${cfg_entry%%:*}"
+        local cfg_name="${cfg_entry#*:}"
+        if [ -f "$cfg_path" ]; then
+            print_success "$cfg_name: $cfg_path"
+            passed=$((passed + 1))
+        else
+            print_error "$cfg_name: NOT FOUND at $cfg_path"
+            failed=$((failed + 1))
+        fi
+    done
+
+    # Check directories
+    print_info "Checking directories..."
+    local dirs=(
+        "$HOME/projects:Projects directory"
+        "$HOME/.zsh:Zsh plugins"
+        "$HOME/.fzf:fzf installation"
+        "$HOME/.nvm:NVM installation"
+        "$HOME/.pyenv:Pyenv installation"
+    )
+    for dir_entry in "${dirs[@]}"; do
+        local dir_path="${dir_entry%%:*}"
+        local dir_name="${dir_entry#*:}"
+        if [ -d "$dir_path" ]; then
+            print_success "$dir_name: $dir_path"
+            passed=$((passed + 1))
+        else
+            print_warning "$dir_name: NOT FOUND at $dir_path"
+            warnings=$((warnings + 1))
+        fi
+    done
+
+    # Summary
+    echo ""
+    print_msg "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_msg "$CYAN" "  VERIFICATION SUMMARY"
+    print_msg "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_success "Passed: $passed"
+    [ $warnings -gt 0 ] && print_warning "Warnings: $warnings (optional components)"
+    [ $failed -gt 0 ] && print_error "Failed: $failed"
+
+    if [ $failed -eq 0 ]; then
+        print_success "All essential verifications passed!"
+        return 0
+    else
+        print_error "Some verifications failed. Run the setup script to install missing components."
+        return 1
+    fi
+}
+
+################################################################################
 # MAIN MENU
 ################################################################################
 
@@ -2307,7 +2435,7 @@ show_menu() {
     clear
     print_msg "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_msg "$CYAN" "  WSL Ubuntu - Developer Setup Script"
-    print_msg "$CYAN" "  Version 1.0 | WSL2 Optimized"
+    print_msg "$CYAN" "  Version 1.1.0 | WSL2 Optimized"
     print_msg "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "1)  Full installation (recommended)"
@@ -2368,6 +2496,10 @@ full_install() {
     final_setup
     show_windows_integration_guide
 
+    # Verify installation
+    echo ""
+    verify_installation
+
     show_completion_message
 }
 
@@ -2398,6 +2530,10 @@ interactive_install() {
     ask_yes_no "Configure SSH/GPG?" y && configure_ssh_gpg
     ask_yes_no "Final configuration?" y && final_setup
     ask_yes_no "Show Windows integration guide?" y && show_windows_integration_guide
+
+    # Verify installation
+    echo ""
+    verify_installation
 
     show_completion_message
 }
@@ -2456,6 +2592,10 @@ orchestrated_install() {
     # Phase 5: Final Setup
     final_setup
     show_windows_integration_guide
+
+    # Verify installation
+    echo ""
+    verify_installation
 
     show_completion_message
 }
@@ -2530,11 +2670,15 @@ main() {
             --check)
                 check_wsl_environment
                 ;;
+            --verify)
+                verify_installation
+                ;;
             --help)
-                echo "Usage: $0 [--full|--orchestrated|--check|--help]"
+                echo "Usage: $0 [--full|--orchestrated|--check|--verify|--help]"
                 echo "  --full         Full non-interactive installation (menu-based)"
                 echo "  --orchestrated Orchestrated installation (PowerShell launcher)"
                 echo "  --check        Check WSL prerequisites only"
+                echo "  --verify       Verify installation health (check all tools/configs)"
                 echo "  --help         Show this help"
                 echo ""
                 echo "Environment Variables:"

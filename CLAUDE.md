@@ -10,6 +10,7 @@ wsl-ubuntu-setup: One-click WSL2 development environment setup with shell, langu
 | Interactive | `./wsl_ubuntu_setup.sh` | Menu-based installation |
 | Orchestrated | `./wsl_ubuntu_setup.sh --orchestrated` | PowerShell launcher mode |
 | Check | `./wsl_ubuntu_setup.sh --check` | Verify WSL prerequisites |
+| Verify | `./wsl_ubuntu_setup.sh --verify` | Verify installation health |
 | Test | `bats tests/` | Run BATS test suite |
 | Lint | `shellcheck wsl_ubuntu_setup.sh` | Check shell script quality |
 

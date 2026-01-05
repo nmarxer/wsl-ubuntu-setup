@@ -92,6 +92,14 @@ SUDO_PASSWORD="yourpass" ./wsl_ubuntu_setup.sh --full
 
 For automated deployments.
 
+### Verify Installation
+
+```bash
+./wsl_ubuntu_setup.sh --verify
+```
+
+Checks all installed tools, configs, and directories after installation.
+
 ## Directory Structure
 
 ```

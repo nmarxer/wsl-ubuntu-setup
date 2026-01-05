@@ -1,0 +1,108 @@
+name: Test WSL Setup Script
+
+on:
+  push:
+    branches: [main, master, fix/*, feature/*]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Lint & Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on main script
+        run: shellcheck -s bash wsl_ubuntu_setup.sh
+
+      - name: Validate bash syntax
+        run: bash -n wsl_ubuntu_setup.sh
+
+      - name: Install zsh for syntax check
+        run: sudo apt-get install -y zsh
+
+      - name: Validate zshrc syntax
+        run: zsh -n dotfiles/zshrc
+
+      - name: Validate zshrc.d files syntax
+        run: |
+          for file in dotfiles/zshrc.d/*.zsh; do
+            echo "Checking $file..."
+            zsh -n "$file"
+          done
+
+  test:
+    name: BATS Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install BATS
+        run: |
+          git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
+          cd /tmp/bats-core && sudo ./install.sh /usr/local
+
+      - name: Install zsh for tests
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Run BATS tests
+        run: bats tests/
+
+  validate-dotfiles:
+    name: Validate Dotfiles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          files=(
+            "wsl_ubuntu_setup.sh"
+            "dotfiles/zshrc"
+            "dotfiles/zshrc.d/aliases.zsh"
+            "dotfiles/zshrc.d/functions.zsh"
+            "dotfiles/zshrc.d/personal.zsh"
+            "dotfiles/zshrc.d/tmux.zsh"
+            "dotfiles/tmux.conf"
+            "dotfiles/ohmyposh/catppuccin_mocha.omp.json"
+            "dotfiles/Microsoft.PowerShell_profile.ps1"
+          )
+          for file in "${files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✅ $file exists"
+            else
+              echo "❌ $file NOT FOUND"
+              exit 1
+            fi
+          done
+
+      - name: Validate JSON files
+        run: |
+          for json in dotfiles/ohmyposh/*.json; do
+            echo "Validating $json..."
+            python3 -c "import json; json.load(open('$json'))"
+          done
+
+      - name: Check for secrets in dotfiles
+        run: |
+          # Check for common secret patterns
+          if grep -rE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" dotfiles/ 2>/dev/null | grep -v "#"; then
+            echo "❌ Potential secrets found in dotfiles!"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Check for private keys
+        run: |
+          if grep -r "PRIVATE KEY" dotfiles/ 2>/dev/null; then
+            echo "❌ Private key found in dotfiles!"
+            exit 1
+          fi
+          echo "✅ No private keys found"
