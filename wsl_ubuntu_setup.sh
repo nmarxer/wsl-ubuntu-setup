@@ -959,7 +959,7 @@ table inet filter {
         ip6 nexthdr icmpv6 accept
 
         # Development ports from RFC1918 only
-        ip saddr @rfc1918 tcp dport 22 accept comment "SSH"
+        ip saddr @rfc1918 tcp dport 222 accept comment "SSH (WSL)"
         ip saddr @rfc1918 tcp dport 80 accept comment "HTTP"
         ip saddr @rfc1918 tcp dport 443 accept comment "HTTPS"
         ip saddr @rfc1918 tcp dport 3000 accept comment "Node.js/React dev"
@@ -1022,6 +1022,9 @@ configure_sshd() {
 # WSL2 SSH Server Configuration
 # Security hardened settings
 
+# Use port 222 to avoid conflict with Windows SSH (port 22)
+Port 222
+
 # Disable root login
 PermitRootLogin no
 
@@ -1069,11 +1072,11 @@ EOF
 
         # Check if service is running
         if systemctl is-active --quiet ssh 2>/dev/null; then
-            print_success "SSH server running on port 22"
+            print_success "SSH server running on port 222"
 
             # Get WSL IP address
             local wsl_ip=$(hostname -I | awk '{print $1}')
-            print_info "Connect from Windows: ssh ${USER}@${wsl_ip}"
+            print_info "Connect from Windows: ssh -p 222 ${USER}@${wsl_ip}"
         else
             print_warning "SSH service configured but not running (restart WSL)"
         fi
