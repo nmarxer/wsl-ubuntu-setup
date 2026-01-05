@@ -1089,7 +1089,8 @@ install_nodejs_env() {
     print_success "TypeScript installed"
 
     # Install Bun (fast JavaScript runtime and package manager)
-    if ! command_exists bun; then
+    # Note: bun installs to ~/.bun/bin, check both PATH and direct location
+    if ! command_exists bun && [ ! -f "$HOME/.bun/bin/bun" ]; then
         print_info "Installing Bun..."
         curl -fsSL https://bun.sh/install | bash
 
@@ -1108,6 +1109,9 @@ EOF
         fi
         print_success "Bun installed"
     else
+        # Ensure PATH is set even if already installed
+        export BUN_INSTALL="$HOME/.bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
         print_success "Bun already installed"
     fi
 
@@ -1484,15 +1488,20 @@ install_modern_cli_tools() {
     fi
 
     # atuin - Enhanced shell history with sync
-    if ! command_exists atuin; then
+    # Note: atuin installs to ~/.atuin/bin, check both PATH and direct location
+    if ! command_exists atuin && [ ! -f "$HOME/.atuin/bin/atuin" ]; then
         print_info "Installing atuin..."
         curl -sSf https://setup.atuin.sh | bash
 
-        # Add atuin to .zshrc
+        # Add atuin to PATH for current session
+        export PATH="$HOME/.atuin/bin:$PATH"
+
+        # Add atuin to .zshrc (PATH and init)
         if ! grep -q "atuin init zsh" ~/.zshrc 2>/dev/null; then
             cat >> ~/.zshrc << 'EOF'
 
 # Atuin - Enhanced shell history
+export PATH="$HOME/.atuin/bin:$PATH"
 eval "$(atuin init zsh)"
 EOF
         fi
