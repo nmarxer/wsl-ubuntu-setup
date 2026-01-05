@@ -55,12 +55,13 @@ wsl --list --verbose
 | 4.1 | `shell` | Sets Zsh as default, installs zsh-autosuggestions, zsh-syntax-highlighting, Oh My Posh, Rust/Cargo, eza, creates fd symlink |
 | 4.2 | `zsh_files` | Copies dotfiles: `~/.zshrc`, `~/.zshrc.d/*.zsh`, `~/.tmux.conf` from repo |
 
-### Phase 5: System Optimization (1-2 min)
+### Phase 5: System Optimization & SSH (1-2 min)
 
 | Step | Checkpoint | What Happens |
 |------|------------|--------------|
 | 5.1 | `optimizations` | Sets `fs.inotify.max_user_watches=524288`, increases nofile/nproc limits |
 | 5.2 | `nftables` | Configures firewall: allows ports 22, 80, 443, 3000, 8000 from RFC1918 only |
+| 5.3 | `sshd` | Installs openssh-server with security-hardened config (no root login, strong ciphers) |
 
 ### Phase 6: Language Runtimes (10-15 min)
 

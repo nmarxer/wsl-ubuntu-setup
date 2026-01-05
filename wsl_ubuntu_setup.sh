@@ -617,7 +617,7 @@ install_packages() {
     # Note: fzf installed separately from GitHub for latest version (apt is outdated)
     local packages=(
         git zsh bat fd-find ripgrep btop ncdu tldr zoxide unzip
-        nmap tcpdump netcat-openbsd
+        nmap tcpdump netcat-openbsd openssh-server
         python3-pip tmux gh glab
         make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev
         libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils tk-dev
@@ -994,6 +994,94 @@ EOF
     print_success "nftables configured for development ports (22, 80, 443, 3000, 8000)"
     print_info "Access restricted to RFC1918 private networks"
     mark_completed "nftables"
+}
+
+################################################################################
+# SSH SERVER CONFIGURATION
+################################################################################
+
+configure_sshd() {
+    if is_completed "sshd"; then
+        print_info "SSH server already configured, skipping"
+        return 0
+    fi
+
+    print_header "Configuring SSH Server"
+
+    # Check if openssh-server is installed
+    if ! dpkg -l openssh-server 2>/dev/null | grep -q "^ii"; then
+        print_info "Installing openssh-server..."
+        do_sudo apt update
+        do_sudo apt install -y openssh-server
+    fi
+
+    # Configure sshd for security
+    local sshd_config="/etc/ssh/sshd_config.d/99-wsl-secure.conf"
+
+    do_sudo tee "$sshd_config" > /dev/null << 'EOF'
+# WSL2 SSH Server Configuration
+# Security hardened settings
+
+# Disable root login
+PermitRootLogin no
+
+# Use key-based authentication (recommended)
+PubkeyAuthentication yes
+
+# Allow password authentication (for initial setup)
+PasswordAuthentication yes
+
+# Disable empty passwords
+PermitEmptyPasswords no
+
+# Use strong ciphers only
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr
+
+# Use strong MACs
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+
+# Use strong key exchange algorithms
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org
+
+# Limit authentication attempts
+MaxAuthTries 3
+
+# Client alive settings (prevent zombie connections)
+ClientAliveInterval 300
+ClientAliveCountMax 2
+
+# Logging
+LogLevel VERBOSE
+EOF
+
+    # Generate host keys if they don't exist
+    if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+        print_info "Generating SSH host keys..."
+        do_sudo ssh-keygen -A
+    fi
+
+    # Enable and start SSH service (requires systemd)
+    if command -v systemctl &> /dev/null; then
+        do_sudo systemctl enable ssh 2>/dev/null || true
+        do_sudo systemctl start ssh 2>/dev/null || {
+            print_warning "SSH service not started (may need WSL restart with systemd)"
+        }
+
+        # Check if service is running
+        if systemctl is-active --quiet ssh 2>/dev/null; then
+            print_success "SSH server running on port 22"
+
+            # Get WSL IP address
+            local wsl_ip=$(hostname -I | awk '{print $1}')
+            print_info "Connect from Windows: ssh ${USER}@${wsl_ip}"
+        else
+            print_warning "SSH service configured but not running (restart WSL)"
+        fi
+    else
+        print_warning "systemd not available, SSH server will start after WSL restart"
+    fi
+
+    mark_completed "sshd"
 }
 
 ################################################################################
@@ -2481,6 +2569,7 @@ full_install() {
     configure_zsh_files
     optimize_system
     configure_nftables
+    configure_sshd
     install_python_env
     install_nodejs_env
     install_go_env
@@ -2518,6 +2607,7 @@ interactive_install() {
     ask_yes_no "Configure Zsh files?" y && configure_zsh_files
     ask_yes_no "Optimize system?" y && optimize_system
     ask_yes_no "Configure nftables firewall?" y && configure_nftables
+    ask_yes_no "Configure SSH server?" y && configure_sshd
     ask_yes_no "Install Python environment?" y && install_python_env
     ask_yes_no "Install Node.js environment?" y && install_nodejs_env
     ask_yes_no "Install Go environment?" y && install_go_env
@@ -2579,6 +2669,7 @@ orchestrated_install() {
     configure_zsh_files
     optimize_system
     configure_nftables
+    configure_sshd
     install_python_env
     install_nodejs_env
     install_go_env

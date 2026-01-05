@@ -262,6 +262,7 @@ sed -i '/python_env/d' ~/.wsl_ubuntu_setup_logs/.checkpoint
 | `zsh_files` | Dotfiles copied |
 | `optimizations` | System limits configured |
 | `nftables` | Firewall configured |
+| `sshd` | SSH server (openssh-server) configured |
 | `python_env` | pyenv, Python, Poetry, uv |
 | `nodejs_env` | nvm, Node.js, pnpm, Bun |
 | `go_env` | Go installed and configured |
