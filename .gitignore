@@ -1,0 +1,22 @@
+# Checkpoint files (generated during setup)
+.wsl_setup_checkpoint
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test artifacts
+/tmp/
+
+# Claude evaluation reports (local only)
+.claude/

@@ -1,0 +1,77 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ZSH Configuration - Clean Setup (No Oh My Zsh)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# === HISTORY ===
+HISTFILE=~/.zsh_history
+HISTSIZE=50000
+SAVEHIST=50000
+setopt EXTENDED_HISTORY          # Write timestamp to history
+setopt HIST_EXPIRE_DUPS_FIRST    # Expire duplicate entries first
+setopt HIST_IGNORE_DUPS          # Don't record duplicates
+setopt HIST_IGNORE_SPACE         # Don't record entries starting with space
+setopt HIST_VERIFY               # Show command before executing from history
+setopt SHARE_HISTORY             # Share history between sessions
+
+# === COMPLETION ===
+autoload -Uz compinit
+compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'  # Case insensitive
+
+# === KEY BINDINGS ===
+bindkey -e                       # Emacs keybindings
+bindkey '^[[A' history-search-backward
+bindkey '^[[B' history-search-forward
+bindkey '^[[H' beginning-of-line
+bindkey '^[[F' end-of-line
+bindkey '^[[3~' delete-char
+
+# === PATH ===
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+# === OH MY POSH (Prompt Theme) ===
+if command -v oh-my-posh &> /dev/null; then
+    eval "$(oh-my-posh init zsh --config ~/.config/ohmyposh/catppuccin_mocha.omp.json)"
+fi
+
+# === ZOXIDE (Smart cd) ===
+if command -v zoxide &> /dev/null; then
+    eval "$(zoxide init zsh --cmd cd)"
+fi
+
+# === FZF (installed from GitHub) ===
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# === PLUGINS (Standalone) ===
+# zsh-autosuggestions
+[ -f ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+    source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+# zsh-syntax-highlighting (MUST be last plugin)
+[ -f ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
+    source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# === SOURCE CUSTOM CONFIGS ===
+for config in ~/.zshrc.d/*.zsh(N); do
+    source "$config"
+done
+
+# === NVM (Node Version Manager) ===
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+# === PYENV ===
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+command -v pyenv &> /dev/null && eval "$(pyenv init -)"
+
+# === GO ===
+export GOPATH="$HOME/go"
+export PATH="$PATH:/usr/local/go/bin:$GOPATH/bin"
+
+# === ATUIN (Shell History) ===
+if command -v atuin &> /dev/null; then
+    eval "$(atuin init zsh)"
+fi
