@@ -2,6 +2,28 @@
 
 Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --full` installation.
 
+## Before You Begin
+
+### Windows Prerequisites
+
+| Requirement | How to Get It |
+|-------------|---------------|
+| Windows 10 (19041+) or 11 | Windows Update |
+| WSL2 enabled | `wsl --install` in PowerShell (Admin) |
+| Ubuntu 22.04 or 24.04 | `wsl --install -d Ubuntu-24.04` |
+| Windows Terminal | Microsoft Store |
+| Docker Desktop (optional) | [docker.com](https://www.docker.com/products/docker-desktop/) |
+
+### Verify WSL2 is Ready
+
+```powershell
+# In PowerShell
+wsl --list --verbose
+# Should show Ubuntu with VERSION 2
+```
+
+---
+
 ## Installation Phases (Chronological Order)
 
 ### Phase 1: Prerequisites & Environment (2-3 min)
@@ -46,7 +68,7 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 |------|------------|--------------|
 | 6.1 | `python_env` | Installs pyenv, Python 3.12.x, Poetry, uv (fast package manager) |
 | 6.2 | `nodejs_env` | Installs NVM, Node.js LTS, pnpm, TypeScript, ts-node, Bun |
-| 6.3 | `go_env` | Downloads latest Go, configures GOPATH/GOROOT |
+| 6.3 | `go_env` | Downloads latest Go to temp dir, configures GOPATH/GOROOT |
 | 6.4 | `powershell` | Installs PowerShell 7, MicrosoftTeams/AzureAD modules, Oh My Posh profile |
 
 ### Phase 7: Containers & Kubernetes (2-5 min)
@@ -54,7 +76,7 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 | Step | Checkpoint | What Happens |
 |------|------------|--------------|
 | 7.1 | `containers` | Prompts for Docker Desktop (recommended) or Docker CE native |
-| 7.2 | `k8s_tools` | Installs kubectl, Helm, adds bitnami repo |
+| 7.2 | `k8s_tools` | Installs kubectl (architecture-aware), Helm, adds bitnami repo |
 
 ### Phase 8: Development Tools (5-8 min)
 
@@ -78,6 +100,14 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 |------|------------|--------------|
 | 10.1 | `final` | Creates `~/projects/{personal,work,experiments}`, `~/thoughts`, `~/scripts/`, global gitignore |
 
+### Phase 11: Verification
+
+| Step | What Happens |
+|------|--------------|
+| 11.1 | Runs `verify_installation()` to check all tools, configs, and directories |
+| 11.2 | Displays summary of passed/failed/warning checks |
+| 11.3 | Shows completion message with next steps |
+
 ---
 
 ## Total Fresh Install Time: ~40-60 minutes
@@ -92,7 +122,7 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 
 | Task | Instructions |
 |------|--------------|
-| Install WSL2 | PowerShell: `wsl --install -d Ubuntu-24.04` |
+| Install WSL2 | PowerShell (Admin): `wsl --install -d Ubuntu-24.04` |
 | Windows Terminal | Microsoft Store → Windows Terminal |
 | Docker Desktop | Download from docker.com, enable WSL2 integration |
 
@@ -101,7 +131,7 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 | Prompt | When | Options |
 |--------|------|---------|
 | Sudo password | Start | Required for apt/system changes |
-| WSL restart | After systemd enable | Script exits, run `wsl --shutdown`, restart |
+| WSL restart | After systemd enable | Script pauses, run `wsl --shutdown`, restart |
 | Docker choice | Phase 7 | 1=Docker Desktop, 2=Docker CE, 3=Skip |
 | SSH key registration | Phase 9 | Must manually add to GitHub/GitLab web UI |
 
@@ -119,51 +149,6 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 
 ---
 
-## What Was Missing in Your Install (Fixed Today)
-
-| Issue | Root Cause | Fix Applied |
-|-------|------------|-------------|
-| Skill hooks failing | `node_modules` not installed + hardcoded Node v20 path | `npm install` + dynamic Node detection |
-| Statusline failing | Bun not installed + relative path | Installed Bun + full path in settings.json |
-| Bun missing | Script doesn't install Bun in `nodejs_env` | Installed manually (should add to script) |
-| atuin missing | Installation failed silently | Not fixed yet |
-
----
-
-## Recommended Script Improvements
-
-### Should Add to Script
-
-```bash
-# 1. In install_nodejs_env() - Bun is installed but PATH may not persist
-# Add: Verify bun is in PATH after install
-
-# 2. In install_modern_cli_tools() - atuin install may fail
-# Add: Verify atuin installed, retry if needed
-
-# 3. In configure_shell() - Oh My Posh theme path
-# Add: Verify theme file exists at expected location
-
-# 4. Post-install validation
-# Add: Run verification of all installed tools with versions
-```
-
-### Should Add to README
-
-```markdown
-## Post-Install Checklist
-
-- [ ] Restart WSL: `wsl --shutdown`
-- [ ] Set terminal font to JetBrainsMono Nerd Font
-- [ ] Run `gh auth login`
-- [ ] Run `glab auth login`
-- [ ] Start tmux and press Ctrl+B, I to install plugins
-- [ ] Install VS Code Remote-WSL extension
-- [ ] Enable Docker Desktop WSL integration
-```
-
----
-
 ## Environment Variables Reference
 
 | Variable | Purpose | Default |
@@ -172,11 +157,13 @@ Complete walkthrough of what happens during a fresh `./wsl_ubuntu_setup.sh --ful
 | `USER_EMAIL` | Git/SSH email | "your.email@example.com" |
 | `USER_GITHUB` | GitHub username | "yourusername" |
 | `USER_GITLAB` | GitLab username | "yourusername" |
-| `SUDO_PASSWORD` | Non-interactive sudo | (none) |
+| `SUDO_PASSWORD` | Non-interactive sudo | (interactive prompt) |
 | `REPO_LIST` | Repos to clone | .claude,.config,thoughts |
 | `SKIP_SSH_VALIDATE` | Skip SSH validation | 0 |
 | `SKIP_GPG_SETUP` | Skip GPG setup | 0 |
-| `DOCKER_CHOICE` | Docker option (1/2/3) | (interactive) |
+| `DOCKER_CHOICE` | Docker option (1/2/3) | (interactive prompt) |
+| `COMPANY_GITLAB` | Corporate GitLab URL | - |
+| `COMPANY_JUMPHOST` | SSH jumphost config | - |
 
 ---
 
@@ -200,8 +187,8 @@ rm ~/.wsl_ubuntu_setup_logs/.checkpoint
 ## Quick Reference Commands
 
 ```bash
-# Full install (non-interactive with password)
-SUDO_PASSWORD="pass" USER_FULLNAME="Name" USER_EMAIL="email" ./wsl_ubuntu_setup.sh --full
+# Full install (non-interactive with env vars)
+USER_FULLNAME="Name" USER_EMAIL="email" SUDO_PASSWORD="pass" ./wsl_ubuntu_setup.sh --full
 
 # Check prerequisites only
 ./wsl_ubuntu_setup.sh --check
@@ -209,9 +196,84 @@ SUDO_PASSWORD="pass" USER_FULLNAME="Name" USER_EMAIL="email" ./wsl_ubuntu_setup.
 # Interactive menu
 ./wsl_ubuntu_setup.sh
 
+# Verify installation health
+./wsl_ubuntu_setup.sh --verify
+
 # View logs
 cat ~/.wsl_ubuntu_setup_logs/setup_*.log | tail -100
 
-# Verify installation
+# Manual verification
 zsh --version && oh-my-posh --version && node --version && python3 --version && go version
 ```
+
+---
+
+## Troubleshooting Fresh Install Issues
+
+### Script Fails Early
+
+```bash
+# Check prerequisites
+./wsl_ubuntu_setup.sh --check
+
+# Common issues:
+# - Not running as regular user (not root)
+# - No internet connection
+# - Insufficient disk space (<25GB)
+```
+
+### WSL Restart Required
+
+The script will pause after enabling systemd. In PowerShell:
+
+```powershell
+wsl --shutdown
+# Wait 5 seconds, then reopen Ubuntu
+```
+
+### Tool Not Found After Install
+
+```bash
+# Reload shell
+source ~/.zshrc
+
+# Or restart terminal
+exec zsh
+```
+
+### Verification Shows Failures
+
+```bash
+# Run verification
+./wsl_ubuntu_setup.sh --verify
+
+# For failed items, reset that checkpoint and re-run
+sed -i '/failed_checkpoint/d' ~/.wsl_ubuntu_setup_logs/.checkpoint
+./wsl_ubuntu_setup.sh --full
+```
+
+---
+
+## What Gets Installed Where
+
+| Item | Location |
+|------|----------|
+| Zsh config | `~/.zshrc` |
+| Zsh modules | `~/.zshrc.d/*.zsh` |
+| Zsh plugins | `~/.zsh/` |
+| Oh My Posh theme | `~/.config/ohmyposh/catppuccin_mocha.omp.json` |
+| tmux config | `~/.tmux.conf` |
+| tmux plugins | `~/.tmux/plugins/` |
+| SSH keys | `~/.ssh/id_ed25519_*` |
+| GPG keys | `~/.gnupg/` |
+| Installation logs | `~/.wsl_ubuntu_setup_logs/` |
+| Checkpoints | `~/.wsl_ubuntu_setup_logs/.checkpoint` |
+| Backups | `~/backup_preinstall_YYYYMMDD/` |
+| Projects | `~/projects/{personal,work,experiments}` |
+| pyenv | `~/.pyenv/` |
+| nvm | `~/.nvm/` |
+| Rust/Cargo | `~/.cargo/` |
+| Go workspace | `~/go/` |
+| fzf | `~/.fzf/` |
+| Bun | `~/.bun/` |
+| Atuin | `~/.atuin/` |
