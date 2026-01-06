@@ -62,6 +62,23 @@ USER_FULLNAME="Your Name" USER_EMAIL="you@example.com" ./wsl_ubuntu_setup.sh --f
 | **Security** | SSH keys (ed25519), GPG keys, nftables firewall |
 | **Testing** | SIPp, k6, vegeta |
 
+## Uninstall / Reset for Testing
+
+Remove everything for a clean slate (PowerShell as Admin):
+
+```powershell
+irm https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/scripts/Uninstall-DevEnvironment.ps1 -OutFile $env:TEMP\uninstall.ps1; & $env:TEMP\uninstall.ps1
+```
+
+This removes (in order): Tailscale → Windows SSH → SSH keys → WSL distros → WSL feature
+
+| Flag | Effect |
+|------|--------|
+| `-KeepTailscale` | Keep Tailscale installed |
+| `-KeepSSH` | Keep Windows OpenSSH Server |
+| `-KeepWSL` | Only remove distros, keep WSL feature |
+| `-Force` | Skip confirmation prompts |
+
 ## Prerequisites
 
 - Windows 10 (19041+) or Windows 11
