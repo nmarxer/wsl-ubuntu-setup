@@ -119,6 +119,7 @@ After installation completes:
 - [ ] **Set terminal font**: Windows Terminal → Settings → Ubuntu → Font face → JetBrainsMono Nerd Font
 - [ ] **Authenticate GitHub CLI**: Run `gh auth login`
 - [ ] **Authenticate GitLab CLI**: Run `glab auth login`
+- [ ] **Authenticate Tailscale**: Run `sudo tailscale up` (WSL) and `tailscale up` (Windows)
 - [ ] **Install tmux plugins**: Start tmux, press `Ctrl+B` then `I`
 - [ ] **VS Code**: Install "Remote - WSL" extension
 - [ ] **Docker Desktop**: Enable WSL integration in Docker Desktop settings

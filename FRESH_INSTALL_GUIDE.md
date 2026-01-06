@@ -145,6 +145,7 @@ wsl --list --verbose
 | **Set terminal font** | Windows Terminal → Settings → Ubuntu → JetBrainsMono Nerd Font | Icons display correctly |
 | **GitHub CLI auth** | `gh auth login` | Enables `gh` commands |
 | **GitLab CLI auth** | `glab auth login` | Enables `glab` commands |
+| **Tailscale auth** | `sudo tailscale up` (WSL), `tailscale up` (Windows) | Connect to Tailscale network |
 | **Install tmux plugins** | Start tmux, press `Ctrl+B` then `I` | Installs TPM plugins |
 | **VS Code extension** | Install "Remote - WSL" extension | Open WSL projects in VS Code |
 | **Docker Desktop** | Enable WSL integration in Docker Desktop settings | Docker commands work in WSL |
