@@ -62,6 +62,7 @@ wsl --list --verbose
 | 5.1 | `optimizations` | Sets `fs.inotify.max_user_watches=524288`, increases nofile/nproc limits |
 | 5.2 | `nftables` | Configures firewall: allows ports 222, 80, 443, 3000, 8000 from RFC1918 only |
 | 5.3 | `sshd` | Installs openssh-server on port 222 with security-hardened config (no root login, strong ciphers) |
+| 5.4 | `tailscale` | Installs Tailscale VPN client and daemon |
 
 ### Phase 6: Language Runtimes (10-15 min)
 

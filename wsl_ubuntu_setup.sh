@@ -1088,6 +1088,53 @@ EOF
 }
 
 ################################################################################
+# TAILSCALE VPN
+################################################################################
+
+install_tailscale() {
+    if is_completed "tailscale"; then
+        print_info "Tailscale already installed, skipping"
+        return 0
+    fi
+
+    print_header "Installing Tailscale"
+
+    # Add Tailscale repository
+    if [ ! -f /usr/share/keyrings/tailscale-archive-keyring.gpg ]; then
+        print_info "Adding Tailscale repository..."
+        curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/$(lsb_release -cs).noarmor.gpg | \
+            do_sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+        curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/$(lsb_release -cs).tailscale-keyring.list | \
+            do_sudo tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+    fi
+
+    # Install Tailscale
+    do_sudo apt update
+    do_sudo apt install -y tailscale
+
+    # Start Tailscale daemon (requires systemd)
+    if command -v systemctl &> /dev/null; then
+        do_sudo systemctl enable tailscaled 2>/dev/null || true
+        do_sudo systemctl start tailscaled 2>/dev/null || {
+            print_warning "Tailscale daemon not started (may need WSL restart with systemd)"
+        }
+
+        if systemctl is-active --quiet tailscaled 2>/dev/null; then
+            print_success "Tailscale daemon running"
+            print_info "Run 'sudo tailscale up' to authenticate"
+        else
+            print_warning "Tailscale installed but daemon not running (restart WSL)"
+        fi
+    else
+        print_warning "systemd not available, Tailscale will start after WSL restart"
+    fi
+
+    print_info "After WSL restart, run: sudo tailscale up"
+
+    mark_completed "tailscale"
+}
+
+################################################################################
 # DEVELOPMENT ENVIRONMENTS
 ################################################################################
 
@@ -2573,6 +2620,7 @@ full_install() {
     optimize_system
     configure_nftables
     configure_sshd
+    install_tailscale
     install_python_env
     install_nodejs_env
     install_go_env
@@ -2611,6 +2659,7 @@ interactive_install() {
     ask_yes_no "Optimize system?" y && optimize_system
     ask_yes_no "Configure nftables firewall?" y && configure_nftables
     ask_yes_no "Configure SSH server?" y && configure_sshd
+    ask_yes_no "Install Tailscale VPN?" y && install_tailscale
     ask_yes_no "Install Python environment?" y && install_python_env
     ask_yes_no "Install Node.js environment?" y && install_nodejs_env
     ask_yes_no "Install Go environment?" y && install_go_env
@@ -2673,6 +2722,7 @@ orchestrated_install() {
     optimize_system
     configure_nftables
     configure_sshd
+    install_tailscale
     install_python_env
     install_nodejs_env
     install_go_env
