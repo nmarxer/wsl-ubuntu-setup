@@ -8,7 +8,27 @@ One-click WSL2 development environment with modern shell, language runtimes, and
 
 ## Quick Start
 
-### Option 1: Clone from GitHub (Recommended)
+### Fresh Windows PC (One Command!)
+
+Run in **PowerShell as Administrator**:
+
+```powershell
+irm https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/scripts/Bootstrap-DevEnvironment.ps1 -OutFile $env:TEMP\bootstrap.ps1; & $env:TEMP\bootstrap.ps1
+```
+
+This single command installs everything: WSL2, Ubuntu, shell setup, Windows SSH, and Tailscale.
+
+With custom config:
+
+```powershell
+irm https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/scripts/Bootstrap-DevEnvironment.ps1 -OutFile $env:TEMP\bootstrap.ps1; & $env:TEMP\bootstrap.ps1 -UserFullName "Your Name" -UserEmail "you@example.com"
+```
+
+---
+
+### Already Have WSL? (Run in Ubuntu)
+
+**Option 1: Clone from GitHub**
 
 ```bash
 git clone https://github.com/nmarxer/wsl-ubuntu-setup.git
@@ -16,13 +36,13 @@ cd wsl-ubuntu-setup
 ./wsl_ubuntu_setup.sh --full
 ```
 
-### Option 2: One-liner with curl
+**Option 2: One-liner with curl**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && chmod +x wsl_ubuntu_setup.sh && ./wsl_ubuntu_setup.sh --full
 ```
 
-### Option 3: With Custom Configuration
+**Option 3: With Custom Configuration**
 
 ```bash
 git clone https://github.com/nmarxer/wsl-ubuntu-setup.git
