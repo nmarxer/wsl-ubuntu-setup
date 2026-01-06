@@ -10,7 +10,10 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [Parameter(HelpMessage="WSL username if different from Windows username")]
+    [string]$WslUsername = ""
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -55,13 +58,28 @@ if (-not (Test-Path $sshDir)) {
 # Try to copy public key from WSL
 $wslPubKey = $null
 $wslDistros = @('Ubuntu', 'Ubuntu-24.04', 'Ubuntu-22.04')
+
+# Try multiple usernames: specified, Windows username, common defaults
+$usernamesToTry = @()
+if ($WslUsername) { $usernamesToTry += $WslUsername }
+$usernamesToTry += $env:USERNAME
+$usernamesToTry += $env:USERNAME.ToLower()
+$usernamesToTry += 'nmarxer'
+$usernamesToTry = $usernamesToTry | Select-Object -Unique
+
+Write-Host "Searching for WSL public key..." -ForegroundColor Gray
+
 foreach ($distro in $wslDistros) {
-    $wslPath = "\\wsl$\$distro\home\$env:USERNAME\.ssh\id_ed25519.pub"
-    if (Test-Path $wslPath) {
-        $wslPubKey = Get-Content $wslPath -Raw
-        Write-Host "Found WSL public key in $distro" -ForegroundColor Green
-        break
+    foreach ($wslUser in $usernamesToTry) {
+        $wslPath = "\\wsl$\$distro\home\$wslUser\.ssh\id_ed25519.pub"
+        Write-Host "  Checking: $wslPath" -ForegroundColor DarkGray
+        if (Test-Path $wslPath) {
+            $wslPubKey = Get-Content $wslPath -Raw
+            Write-Host "Found WSL public key: $wslPath" -ForegroundColor Green
+            break
+        }
     }
+    if ($wslPubKey) { break }
 }
 
 if ($wslPubKey) {
@@ -101,9 +119,13 @@ Restart-Service sshd
 $service = Get-Service sshd
 if ($service.Status -eq 'Running') {
     Write-Host "`n=== Windows SSH Server running on port 22 ===" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Windows username: $env:USERNAME" -ForegroundColor Cyan
     Write-Host "Connect with: ssh $env:USERNAME@localhost" -ForegroundColor Cyan
-    Write-Host "`nWSL SSH: port 222" -ForegroundColor Gray
-    Write-Host "Windows SSH: port 22" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Port summary:" -ForegroundColor Yellow
+    Write-Host "  Windows SSH: port 22  -> ssh $env:USERNAME@<ip>" -ForegroundColor Gray
+    Write-Host "  WSL SSH:     port 222 -> ssh -p 222 <wsl-user>@<ip>" -ForegroundColor Gray
 } else {
     Write-Host "ERROR: sshd service not running" -ForegroundColor Red
     exit 1
