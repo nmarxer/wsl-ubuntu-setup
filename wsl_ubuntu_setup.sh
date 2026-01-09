@@ -2477,12 +2477,83 @@ verify_installation() {
     local failed=0
     local warnings=0
 
+    # Helper function to check command with fallback paths
+    # Tools installed via version managers (nvm, pyenv, go) need special handling
+    check_cmd_version() {
+        local cmd="$1"
+        local version=""
+
+        # First try: direct command (in PATH)
+        if command -v "$cmd" &>/dev/null; then
+            version=$("$cmd" --version 2>&1 | head -1 | cut -c1-50)
+            echo "$version"
+            return 0
+        fi
+
+        # Second try: check known installation paths
+        case "$cmd" in
+            node|npm)
+                if [ -d "$HOME/.nvm" ]; then
+                    # Source nvm and get version
+                    export NVM_DIR="$HOME/.nvm"
+                    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
+                    if command -v "$cmd" &>/dev/null; then
+                        version=$("$cmd" --version 2>&1 | head -1 | cut -c1-50)
+                        [ -n "$version" ] && echo "$version" && return 0
+                    fi
+                fi
+                ;;
+            go)
+                if [ -d "/usr/local/go" ]; then
+                    version=$(/usr/local/go/bin/go version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            oh-my-posh)
+                if [ -f "$HOME/.local/bin/oh-my-posh" ]; then
+                    version=$("$HOME/.local/bin/oh-my-posh" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            fzf)
+                if [ -f "$HOME/.fzf/bin/fzf" ]; then
+                    version=$("$HOME/.fzf/bin/fzf" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            bat)
+                # bat is installed as batcat on Ubuntu
+                if command -v batcat &>/dev/null; then
+                    version=$(batcat --version 2>&1 | head -1 | cut -c1-50)
+                    echo "$version"
+                    return 0
+                fi
+                ;;
+            fd)
+                # fd is installed as fdfind on Ubuntu
+                if command -v fdfind &>/dev/null; then
+                    version=$(fdfind --version 2>&1 | head -1 | cut -c1-50)
+                    echo "$version"
+                    return 0
+                fi
+                ;;
+            bun)
+                if [ -f "$HOME/.bun/bin/bun" ]; then
+                    version=$("$HOME/.bun/bin/bun" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+        esac
+
+        return 1
+    }
+
     # Check essential commands
     print_info "Checking installed commands..."
     local cmds=("zsh" "git" "python3" "node" "npm" "go" "cargo" "oh-my-posh" "fzf" "eza" "bat" "fd" "rg" "zoxide" "btop")
     for cmd in "${cmds[@]}"; do
-        if command_exists "$cmd"; then
-            local version=$($cmd --version 2>&1 | head -1 | cut -c1-50)
+        local version=$(check_cmd_version "$cmd")
+        if [ -n "$version" ]; then
             print_success "$cmd: $version"
             passed=$((passed + 1))
         else
@@ -2495,8 +2566,8 @@ verify_installation() {
     print_info "Checking optional commands..."
     local opt_cmds=("docker" "kubectl" "helm" "lazygit" "lazydocker" "atuin" "bun" "pwsh" "claude")
     for cmd in "${opt_cmds[@]}"; do
-        if command_exists "$cmd"; then
-            local version=$($cmd --version 2>&1 | head -1 | cut -c1-50)
+        local version=$(check_cmd_version "$cmd")
+        if [ -n "$version" ]; then
             print_success "$cmd: $version"
             passed=$((passed + 1))
         else

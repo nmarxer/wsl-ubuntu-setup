@@ -17,6 +17,8 @@
     Skip Windows OpenSSH Server setup
 .PARAMETER SkipWindowsApps
     Skip Windows application installations
+.PARAMETER ResetCheckpoints
+    Clear WSL installation checkpoints for a fresh install
 .PARAMETER UserFullName
     Git author name for WSL setup
 .PARAMETER UserEmail
@@ -43,6 +45,7 @@ param(
     [switch]$SkipWslInstall,
     [switch]$SkipWindowsSSH,
     [switch]$SkipWindowsApps,
+    [switch]$ResetCheckpoints,
     [string]$UserFullName = "",
     [string]$UserEmail = "",
     [string]$UserGithub = "",
@@ -80,7 +83,8 @@ function Write-Warn {
 function Install-WingetApp {
     param(
         [string]$AppId,
-        [string]$AppName
+        [string]$AppName,
+        [string]$ExtraArgs = ""
     )
     $installed = winget list --id $AppId 2>$null | Select-String $AppId
     if ($installed) {
@@ -88,7 +92,8 @@ function Install-WingetApp {
         return $true
     }
     Write-Info "Installing $AppName..."
-    winget install --id $AppId --accept-package-agreements --accept-source-agreements --silent
+    $cmd = "winget install --id $AppId --accept-package-agreements --accept-source-agreements --silent $ExtraArgs"
+    Invoke-Expression $cmd
     if ($LASTEXITCODE -eq 0) {
         Write-Success "$AppName installed"
         return $true
@@ -149,6 +154,13 @@ if ($UserEmail) { $envVars += "USER_EMAIL='$UserEmail' " }
 if ($UserGithub) { $envVars += "USER_GITHUB='$UserGithub' " }
 if ($UserGitlab) { $envVars += "USER_GITLAB='$UserGitlab' " }
 if ($GitlabServer) { $envVars += "COMPANY_GITLAB='$GitlabServer' " }
+
+# Reset checkpoints if requested (for fresh install)
+if ($ResetCheckpoints) {
+    Write-Info "Resetting WSL installation checkpoints..."
+    wsl rm -f ~/.wsl_ubuntu_setup_logs/.checkpoint 2>$null
+    Write-Success "Checkpoints cleared"
+}
 
 $wslCommand = "cd ~ && curl -fsSL $RepoUrl/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && sed -i 's/\r`$//' wsl_ubuntu_setup.sh && chmod +x wsl_ubuntu_setup.sh && $envVars ./wsl_ubuntu_setup.sh --orchestrated"
 
@@ -253,13 +265,13 @@ if (-not $SkipWindowsApps) {
         Install-WingetApp -AppId "Microsoft.PowerShell" -AppName "PowerShell 7"
 
         # Development tools
-        Install-WingetApp -AppId "Zed.Zed" -AppName "Zed Editor"
+        Install-WingetApp -AppId "ZedIndustries.Zed" -AppName "Zed Editor"
         Install-WingetApp -AppId "xpipe-io.xpipe" -AppName "XPipe"
         Install-WingetApp -AppId "Anthropic.Claude" -AppName "Claude Desktop"
 
         # Browsers and media
         Install-WingetApp -AppId "Mozilla.Firefox" -AppName "Mozilla Firefox"
-        Install-WingetApp -AppId "Spotify.Spotify" -AppName "Spotify"
+        Install-WingetApp -AppId "Spotify.Spotify" -AppName "Spotify" -ExtraArgs "--scope user"
 
         # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -275,26 +287,22 @@ if (-not $SkipWindowsApps) {
 
 Write-Step "Step 5/6: SSH and GPG Key Configuration"
 
-# Get WSL user's home directory
-$wslUser = wsl whoami 2>$null
+# Get WSL user
+$wslUser = (wsl whoami 2>$null) -replace '\s+', ''
 if (-not $wslUser) { $wslUser = $env:USERNAME.ToLower() }
-$wslUser = $wslUser.Trim()
 
-# Find SSH public key
+# Get SSH public key directly from WSL (more reliable than UNC paths)
 $sshPubKey = $null
-$gpgPubKey = $null
-foreach ($distro in @('Ubuntu', 'Ubuntu-24.04', 'Ubuntu-22.04')) {
-    $sshPath = "\\wsl`$\$distro\home\$wslUser\.ssh\id_ed25519.pub"
-    if (Test-Path $sshPath) {
-        $sshPubKey = Get-Content $sshPath -Raw
-        break
-    }
+$sshKeyOutput = wsl cat ~/.ssh/id_ed25519.pub 2>$null
+if ($sshKeyOutput -and $sshKeyOutput -match "^ssh-") {
+    $sshPubKey = $sshKeyOutput
 }
 
 # Get GPG key from WSL
-$gpgKeyId = wsl gpg --list-secret-keys --keyid-format LONG 2>$null | Select-String "sec\s+\w+/([A-F0-9]+)" | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -First 1
-if ($gpgKeyId) {
-    $gpgPubKey = wsl gpg --armor --export $gpgKeyId 2>$null
+$gpgPubKey = $null
+$gpgKeyId = wsl bash -c "gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -oP '(?<=sec\s{3}\w{4,5}\/)[A-F0-9]+' | head -1" 2>$null
+if ($gpgKeyId -and $gpgKeyId.Trim()) {
+    $gpgPubKey = wsl gpg --armor --export $($gpgKeyId.Trim()) 2>$null
 }
 
 Write-Host ""
