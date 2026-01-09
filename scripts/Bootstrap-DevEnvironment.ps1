@@ -118,13 +118,13 @@ if (-not $SkipWslInstall) {
 Write-Step "Step 2/5: Running WSL Ubuntu Setup Script"
 
 # Build environment variables for WSL
-$envVars = ""
+$envVars = "DEBIAN_FRONTEND=noninteractive DOCKER_CHOICE=1 SKIP_SSH_VALIDATE=1 "
 if ($UserFullName) { $envVars += "USER_FULLNAME='$UserFullName' " }
 if ($UserEmail) { $envVars += "USER_EMAIL='$UserEmail' " }
 if ($UserGithub) { $envVars += "USER_GITHUB='$UserGithub' " }
 
-# Single-line command to avoid CRLF issues
-$wslCommand = "cd ~ && curl -fsSL $RepoUrl/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && sed -i 's/\r$//' wsl_ubuntu_setup.sh && chmod +x wsl_ubuntu_setup.sh && $envVars ./wsl_ubuntu_setup.sh --full"
+# Single-line command to avoid CRLF issues and interactive prompts
+$wslCommand = "cd ~ && curl -fsSL $RepoUrl/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && sed -i 's/\r$//' wsl_ubuntu_setup.sh && chmod +x wsl_ubuntu_setup.sh && $envVars ./wsl_ubuntu_setup.sh --orchestrated"
 
 Write-Info "Downloading and running WSL setup script..."
 Write-Info "This will take 30-60 minutes..."
