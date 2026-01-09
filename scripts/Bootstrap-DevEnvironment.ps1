@@ -358,26 +358,54 @@ if (-not $SkipWindowsApps) {
 
 Write-Step "Step 5/6: SSH and GPG Key Configuration"
 
-# Get WSL user - must run as specific user, not root
-$wslUser = (wsl whoami 2>$null) -replace '\s+', ''
-if (-not $wslUser -or $wslUser -eq "root") {
-    # When running as admin, WSL defaults to root - get the actual user
-    $wslUser = (wsl bash -c "ls /home | head -1" 2>$null) -replace '\s+', ''
+# Get WSL user - try multiple methods
+$wslUser = $null
+
+# Method 1: Check who owns /home directories
+$homeUsers = wsl bash -c "ls /home 2>/dev/null" 2>$null
+if ($homeUsers) {
+    $wslUser = ($homeUsers -split '\s+' | Where-Object { $_ -ne '' } | Select-Object -First 1)
 }
-if (-not $wslUser) { $wslUser = $env:USERNAME.ToLower() }
+
+# Method 2: Fallback to Windows username lowercase
+if (-not $wslUser) {
+    $wslUser = $env:USERNAME.ToLower()
+}
 
 Write-Info "Detected WSL user: $wslUser"
 
-# Get SSH public key - run as the specific user to avoid root context issues
+# Get SSH public key - try multiple methods
 $sshPubKey = $null
-# Use wsl -u to run as specific user, avoiding admin/root context issues
-$sshKeyOutput = wsl -u $wslUser -- cat /home/$wslUser/.ssh/id_ed25519.pub 2>$null
-# Handle potential array output and clean up
-if ($sshKeyOutput) {
-    $keyText = if ($sshKeyOutput -is [array]) { $sshKeyOutput -join "" } else { $sshKeyOutput.ToString() }
-    $keyText = $keyText.Trim()
-    if ($keyText -like "ssh-*") {
-        $sshPubKey = $keyText
+
+# Method 1: Direct UNC path access (works when WSL is running)
+$uncPaths = @(
+    "\\wsl$\Ubuntu\home\$wslUser\.ssh\id_ed25519.pub",
+    "\\wsl$\Ubuntu-24.04\home\$wslUser\.ssh\id_ed25519.pub",
+    "\\wsl.localhost\Ubuntu\home\$wslUser\.ssh\id_ed25519.pub"
+)
+foreach ($uncPath in $uncPaths) {
+    if (Test-Path $uncPath) {
+        $sshPubKey = (Get-Content $uncPath -Raw).Trim()
+        Write-Info "SSH key found via UNC path"
+        break
+    }
+}
+
+# Method 2: WSL command with explicit user
+if (-not $sshPubKey) {
+    $sshKeyOutput = wsl -u $wslUser -- cat "/home/$wslUser/.ssh/id_ed25519.pub" 2>$null
+    if ($sshKeyOutput -and $sshKeyOutput -like "ssh-*") {
+        $sshPubKey = if ($sshKeyOutput -is [array]) { ($sshKeyOutput -join "").Trim() } else { $sshKeyOutput.ToString().Trim() }
+        Write-Info "SSH key found via wsl -u"
+    }
+}
+
+# Method 3: WSL bash command
+if (-not $sshPubKey) {
+    $sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519.pub 2>/dev/null"
+    if ($sshKeyOutput -and $sshKeyOutput -like "ssh-*") {
+        $sshPubKey = if ($sshKeyOutput -is [array]) { ($sshKeyOutput -join "").Trim() } else { $sshKeyOutput.ToString().Trim() }
+        Write-Info "SSH key found via wsl bash"
     }
 }
 

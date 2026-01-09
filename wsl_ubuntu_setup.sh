@@ -1648,28 +1648,28 @@ install_modern_cli_tools() {
     source $HOME/.cargo/env 2>/dev/null || true
 
     # lazygit - Terminal UI for git
-    if ! command_exists lazygit; then
+    if ! command -v lazygit &>/dev/null && [ ! -f "$HOME/go/bin/lazygit" ]; then
         print_info "Installing lazygit..."
         go install github.com/jesseduffield/lazygit@latest
-        print_success "lazygit installed"
+        print_success "lazygit installed to ~/go/bin/"
     else
         print_success "lazygit already installed"
     fi
 
     # lazydocker - Terminal UI for Docker
-    if ! command_exists lazydocker; then
+    if ! command -v lazydocker &>/dev/null && [ ! -f "$HOME/go/bin/lazydocker" ]; then
         print_info "Installing lazydocker..."
         go install github.com/jesseduffield/lazydocker@latest
-        print_success "lazydocker installed"
+        print_success "lazydocker installed to ~/go/bin/"
     else
         print_success "lazydocker already installed"
     fi
 
     # atuin - Enhanced shell history with sync
     # Note: atuin installs to ~/.atuin/bin, check both PATH and direct location
-    if ! command_exists atuin && [ ! -f "$HOME/.atuin/bin/atuin" ]; then
+    if ! command -v atuin &>/dev/null && [ ! -f "$HOME/.atuin/bin/atuin" ]; then
         print_info "Installing atuin..."
-        curl -sSf https://setup.atuin.sh | bash
+        bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)
 
         # Add atuin to PATH for current session
         export PATH="$HOME/.atuin/bin:$PATH"
@@ -1815,13 +1815,10 @@ EOF
 ################################################################################
 
 install_claude_code() {
-    # Source nvm to check npm-installed packages
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
-
     if is_completed "claude_code"; then
         # Verify claude is actually installed before skipping
-        if ! command -v claude &>/dev/null; then
+        # Claude installs to ~/.claude/local/bin/claude
+        if ! command -v claude &>/dev/null && [ ! -f "$HOME/.claude/local/bin/claude" ]; then
             print_warning "Checkpoint set but claude missing, re-running installation..."
             sed -i '/claude_code/d' "$CHECKPOINT_FILE" 2>/dev/null || true
         else
@@ -1830,24 +1827,31 @@ install_claude_code() {
         fi
     fi
 
-    # Check if Claude is already installed (native installation)
-    if command -v claude &>/dev/null; then
-        print_success "Claude Code already installed (native installation detected)"
-        claude --version 2>/dev/null || true
+    # Check if Claude is already installed
+    # Claude installs to ~/.claude/local/bin/claude
+    if command -v claude &>/dev/null || [ -f "$HOME/.claude/local/bin/claude" ]; then
+        print_success "Claude Code already installed"
+        claude --version 2>/dev/null || "$HOME/.claude/local/bin/claude" --version 2>/dev/null || true
         mark_completed "claude_code"
         return 0
     fi
 
     print_header "Installing Claude Code CLI"
 
-    # Load NVM
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    # Use official installer
+    curl -fsSL https://claude.ai/install.sh | bash
 
-    npm install -g @anthropic-ai/claude-code
-    npm install -g ccusage
+    # Add to PATH for current session
+    export PATH="$HOME/.claude/local/bin:$PATH"
 
-    verify_cmd "Claude Code installed" command -v claude
+    # Verify installation
+    if command -v claude &>/dev/null || [ -f "$HOME/.claude/local/bin/claude" ]; then
+        print_success "Claude Code installed"
+        claude --version 2>/dev/null || true
+    else
+        print_warning "Claude Code installation may have failed"
+    fi
+
     mark_completed "claude_code"
 }
 
@@ -2595,11 +2599,9 @@ verify_installation() {
                 fi
                 ;;
             claude)
-                # Installed via npm global, need nvm
-                export NVM_DIR="$HOME/.nvm"
-                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
-                if command -v claude &>/dev/null; then
-                    version=$(claude --version 2>&1 | head -1 | cut -c1-50)
+                # Installed via official installer to ~/.claude/local/bin/
+                if [ -f "$HOME/.claude/local/bin/claude" ]; then
+                    version=$("$HOME/.claude/local/bin/claude" --version 2>&1 | head -1 | cut -c1-50)
                     [ -n "$version" ] && echo "$version" && return 0
                 fi
                 ;;
