@@ -228,6 +228,37 @@ if ($wsl) {
     # Shutdown WSL
     Write-Info "Shutting down WSL..."
     wsl --shutdown 2>$null
+
+    # Remove WSL data directories
+    Write-Info "Removing WSL data directories..."
+
+    # Remove Ubuntu packages from LocalAppData
+    $wslPackages = Get-ChildItem "$env:LOCALAPPDATA\Packages" -Filter "*Ubuntu*" -ErrorAction SilentlyContinue
+    foreach ($pkg in $wslPackages) {
+        Write-Info "Removing $($pkg.Name)..."
+        Remove-Item -Path $pkg.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Remove CanonicalGroup packages
+    $canonicalPkgs = Get-ChildItem "$env:LOCALAPPDATA\Packages" -Filter "*CanonicalGroup*" -ErrorAction SilentlyContinue
+    foreach ($pkg in $canonicalPkgs) {
+        Write-Info "Removing $($pkg.Name)..."
+        Remove-Item -Path $pkg.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Remove lxss directory (older WSL)
+    if (Test-Path "$env:LOCALAPPDATA\lxss") {
+        Write-Info "Removing lxss directory..."
+        Remove-Item -Path "$env:LOCALAPPDATA\lxss" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Remove .wslconfig
+    if (Test-Path "$env:USERPROFILE\.wslconfig") {
+        Remove-Item "$env:USERPROFILE\.wslconfig" -Force -ErrorAction SilentlyContinue
+        Write-Info "Removed .wslconfig"
+    }
+
+    Write-Success "WSL data directories removed"
 } else {
     Write-Info "WSL not installed"
 }
@@ -246,11 +277,18 @@ if (-not $KeepWSL) {
     Write-Info "Disabling Virtual Machine Platform..."
     Disable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -ErrorAction SilentlyContinue | Out-Null
 
-    # Remove WSL update
+    # Remove WSL update package
     $wslUpdate = Get-Package -Name "*Windows Subsystem for Linux*" -ErrorAction SilentlyContinue
     if ($wslUpdate) {
         Write-Info "Removing WSL update package..."
         $wslUpdate | Uninstall-Package -Force -ErrorAction SilentlyContinue
+    }
+
+    # Uninstall WSL via winget
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Removing WSL via winget..."
+        winget uninstall --id Microsoft.WSL --silent 2>$null
     }
 
     Write-Success "WSL features disabled"

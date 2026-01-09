@@ -35,7 +35,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$WslDistro = "Ubuntu-24.04",
+    [string]$WslDistro = "Ubuntu",
     [switch]$SkipWslInstall,
     [switch]$SkipWindowsSSH,
     [switch]$SkipTailscale,
@@ -123,19 +123,24 @@ if ($UserFullName) { $envVars += "USER_FULLNAME='$UserFullName' " }
 if ($UserEmail) { $envVars += "USER_EMAIL='$UserEmail' " }
 if ($UserGithub) { $envVars += "USER_GITHUB='$UserGithub' " }
 
-$wslCommand = @"
-cd ~ && \
-curl -fsSL $RepoUrl/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && \
-chmod +x wsl_ubuntu_setup.sh && \
-$envVars ./wsl_ubuntu_setup.sh --full
-"@
+# Single-line command to avoid CRLF issues
+$wslCommand = "cd ~ && curl -fsSL $RepoUrl/wsl_ubuntu_setup.sh -o wsl_ubuntu_setup.sh && sed -i 's/\r$//' wsl_ubuntu_setup.sh && chmod +x wsl_ubuntu_setup.sh && $envVars ./wsl_ubuntu_setup.sh --full"
 
 Write-Info "Downloading and running WSL setup script..."
 Write-Info "This will take 30-60 minutes..."
 Write-Host ""
 
+# Get the actual distro name for WSL command
+$wslDistroName = $WslDistro
+if ($WslDistro -eq "Ubuntu") {
+    # Find the actual Ubuntu distro name
+    $installedDistros = wsl --list --quiet 2>$null
+    $ubuntuDistro = $installedDistros | Where-Object { $_ -match "^Ubuntu" } | Select-Object -First 1
+    if ($ubuntuDistro) { $wslDistroName = $ubuntuDistro.Trim() }
+}
+
 # Run in WSL
-wsl -d $WslDistro.Replace("-24.04", "") -- bash -c $wslCommand
+wsl -d $wslDistroName -- bash -c $wslCommand
 
 if ($LASTEXITCODE -eq 0) {
     Write-Success "WSL setup completed"
@@ -180,19 +185,24 @@ if (-not $SkipWindowsSSH) {
     }
 
     # Try to find WSL public key
-    $wslDistroName = $WslDistro.Replace("-24.04", "").Replace("-22.04", "")
+    $wslDistroNames = @('Ubuntu', 'Ubuntu-24.04', 'Ubuntu-22.04')
     $wslUsers = @($env:USERNAME, $env:USERNAME.ToLower(), 'nmarxer')
+    $keyFound = $false
 
-    foreach ($wslUser in $wslUsers) {
-        $wslPath = "\\wsl$\$wslDistroName\home\$wslUser\.ssh\id_ed25519.pub"
-        if (Test-Path $wslPath) {
-            $pubKey = Get-Content $wslPath -Raw
-            $existingKeys = if (Test-Path $authorizedKeys) { Get-Content $authorizedKeys -Raw } else { "" }
-            if ($existingKeys -notlike "*$($pubKey.Trim())*") {
-                Add-Content -Path $authorizedKeys -Value $pubKey.Trim()
-                Write-Success "Added WSL public key to authorized_keys"
+    foreach ($distro in $wslDistroNames) {
+        if ($keyFound) { break }
+        foreach ($wslUser in $wslUsers) {
+            $wslPath = "\\wsl$\$distro\home\$wslUser\.ssh\id_ed25519.pub"
+            if (Test-Path $wslPath) {
+                $pubKey = Get-Content $wslPath -Raw
+                $existingKeys = if (Test-Path $authorizedKeys) { Get-Content $authorizedKeys -Raw } else { "" }
+                if ($existingKeys -notlike "*$($pubKey.Trim())*") {
+                    Add-Content -Path $authorizedKeys -Value $pubKey.Trim()
+                    Write-Success "Added WSL public key to authorized_keys"
+                }
+                $keyFound = $true
+                break
             }
-            break
         }
     }
 
