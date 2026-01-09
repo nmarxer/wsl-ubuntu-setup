@@ -50,25 +50,25 @@ $RepoUrl = "https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main"
 function Write-Step {
     param([string]$Message)
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "===========================================================" -ForegroundColor Cyan
     Write-Host "  $Message" -ForegroundColor Cyan
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "===========================================================" -ForegroundColor Cyan
     Write-Host ""
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "→ $Message" -ForegroundColor Gray
+    Write-Host "-> $Message" -ForegroundColor Gray
 }
 
 function Write-Warn {
     param([string]$Message)
-    Write-Host "⚠ $Message" -ForegroundColor Yellow
+    Write-Host "[!] $Message" -ForegroundColor Yellow
 }
 
 # ============================================================================
@@ -250,28 +250,28 @@ if (-not $SkipTailscale) {
 
 Write-Step "Step 5/5: Setup Complete!"
 
-Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║                    INSTALLATION COMPLETE                       ║" -ForegroundColor Green
-Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "                    INSTALLATION COMPLETE                       " -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
 
 Write-Host "Port Configuration:" -ForegroundColor Yellow
-Write-Host "  • Windows SSH: port 22" -ForegroundColor Gray
-Write-Host "  • WSL SSH:     port 222" -ForegroundColor Gray
+Write-Host "  - Windows SSH: port 22" -ForegroundColor Gray
+Write-Host "  - WSL SSH:     port 222" -ForegroundColor Gray
 Write-Host ""
 
 Write-Host "Next Steps:" -ForegroundColor Yellow
 Write-Host "  1. Restart WSL:        wsl --shutdown" -ForegroundColor Cyan
 Write-Host "  2. Authenticate Tailscale:" -ForegroundColor Cyan
-Write-Host "     • Windows: tailscale up" -ForegroundColor Gray
-Write-Host "     • WSL:     sudo tailscale up" -ForegroundColor Gray
+Write-Host "     - Windows: tailscale up" -ForegroundColor Gray
+Write-Host "     - WSL:     sudo tailscale up" -ForegroundColor Gray
 Write-Host "  3. Auth GitHub CLI:    gh auth login (in WSL)" -ForegroundColor Cyan
 Write-Host "  4. Auth GitLab CLI:    glab auth login (in WSL)" -ForegroundColor Cyan
 Write-Host "  5. Install Nerd Font:  JetBrainsMono from nerdfonts.com" -ForegroundColor Cyan
-Write-Host "  6. Set terminal font:  Windows Terminal → Settings → Ubuntu" -ForegroundColor Cyan
+Write-Host "  6. Set terminal font:  Windows Terminal -> Settings -> Ubuntu" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "Test SSH connections:" -ForegroundColor Yellow
-Write-Host "  • Windows: ssh $env:USERNAME@localhost" -ForegroundColor Gray
-Write-Host "  • WSL:     ssh -p 222 <wsl-user>@localhost" -ForegroundColor Gray
+Write-Host "  - Windows: ssh $env:USERNAME@localhost" -ForegroundColor Gray
+Write-Host "  - WSL:     ssh -p 222 <wsl-user>@localhost" -ForegroundColor Gray
 Write-Host ""

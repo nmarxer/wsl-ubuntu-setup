@@ -38,40 +38,40 @@ $ErrorActionPreference = 'Continue'
 function Write-Step {
     param([string]$Message)
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host "===========================================================" -ForegroundColor Red
     Write-Host "  $Message" -ForegroundColor Red
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Red
+    Write-Host "===========================================================" -ForegroundColor Red
     Write-Host ""
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "→ $Message" -ForegroundColor Gray
+    Write-Host "-> $Message" -ForegroundColor Gray
 }
 
 function Write-Warn {
     param([string]$Message)
-    Write-Host "⚠ $Message" -ForegroundColor Yellow
+    Write-Host "[!] $Message" -ForegroundColor Yellow
 }
 
 # Confirmation
 if (-not $Force) {
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Red
-    Write-Host "║              WARNING: DESTRUCTIVE OPERATION                    ║" -ForegroundColor Red
-    Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host "              WARNING: DESTRUCTIVE OPERATION                    " -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
     Write-Host ""
     Write-Host "This will PERMANENTLY remove:" -ForegroundColor Yellow
-    if (-not $KeepTailscale) { Write-Host "  • Tailscale VPN" -ForegroundColor Gray }
-    if (-not $KeepSSH) { Write-Host "  • Windows OpenSSH Server" -ForegroundColor Gray }
-    Write-Host "  • SSH authorized_keys" -ForegroundColor Gray
-    Write-Host "  • ALL WSL distributions and their data" -ForegroundColor Gray
-    if (-not $KeepWSL) { Write-Host "  • WSL feature entirely" -ForegroundColor Gray }
+    if (-not $KeepTailscale) { Write-Host "  - Tailscale VPN" -ForegroundColor Gray }
+    if (-not $KeepSSH) { Write-Host "  - Windows OpenSSH Server" -ForegroundColor Gray }
+    Write-Host "  - SSH authorized_keys" -ForegroundColor Gray
+    Write-Host "  - ALL WSL distributions and their data" -ForegroundColor Gray
+    if (-not $KeepWSL) { Write-Host "  - WSL feature entirely" -ForegroundColor Gray }
     Write-Host ""
 
     $confirm = Read-Host "Type 'YES' to confirm"
@@ -263,20 +263,20 @@ if (-not $KeepWSL) {
 # ============================================================================
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║                    UNINSTALL COMPLETE                          ║" -ForegroundColor Green
-Write-Host "╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "                    UNINSTALL COMPLETE                          " -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
 
 Write-Host "Removed:" -ForegroundColor Yellow
-if (-not $KeepTailscale) { Write-Host "  ✓ Tailscale" -ForegroundColor Green }
-if (-not $KeepSSH) { Write-Host "  ✓ Windows OpenSSH Server" -ForegroundColor Green }
-Write-Host "  ✓ SSH authorized_keys" -ForegroundColor Green
-Write-Host "  ✓ WSL distributions" -ForegroundColor Green
-if (-not $KeepWSL) { Write-Host "  ✓ WSL feature" -ForegroundColor Green }
+if (-not $KeepTailscale) { Write-Host "  [OK] Tailscale" -ForegroundColor Green }
+if (-not $KeepSSH) { Write-Host "  [OK] Windows OpenSSH Server" -ForegroundColor Green }
+Write-Host "  [OK] SSH authorized_keys" -ForegroundColor Green
+Write-Host "  [OK] WSL distributions" -ForegroundColor Green
+if (-not $KeepWSL) { Write-Host "  [OK] WSL feature" -ForegroundColor Green }
 
 Write-Host ""
-Write-Host "⚠ RESTART REQUIRED to complete WSL removal" -ForegroundColor Yellow
+Write-Host ">> RESTART REQUIRED to complete WSL removal" -ForegroundColor Yellow
 Write-Host ""
 
 $restart = Read-Host "Restart now? (y/n)"
