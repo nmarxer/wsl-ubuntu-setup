@@ -2555,7 +2555,7 @@ verify_installation() {
 
     # Check essential commands
     print_info "Checking installed commands..."
-    local cmds=("zsh" "git" "python3" "node" "npm" "go" "cargo" "oh-my-posh" "fzf" "eza" "bat" "fd" "rg" "zoxide" "btop")
+    local cmds=("zsh" "git" "python3" "node" "npm" "go" "cargo" "oh-my-posh" "fzf" "eza" "bat" "fd" "rg" "zoxide" "btop" "lazygit" "lazydocker" "atuin" "claude")
     for cmd in "${cmds[@]}"; do
         local version=$(check_cmd_version "$cmd")
         if [ -n "$version" ]; then
@@ -2569,7 +2569,7 @@ verify_installation() {
 
     # Check optional commands (warning only)
     print_info "Checking optional commands..."
-    local opt_cmds=("docker" "kubectl" "helm" "lazygit" "lazydocker" "atuin" "bun" "pwsh" "claude")
+    local opt_cmds=("docker" "kubectl" "helm" "bun" "pwsh")
     for cmd in "${opt_cmds[@]}"; do
         local version=$(check_cmd_version "$cmd")
         if [ -n "$version" ]; then

@@ -104,6 +104,57 @@ function Install-WingetApp {
 }
 
 # ============================================================================
+# PHASE 0: User Information Collection
+# ============================================================================
+
+Write-Step "Phase 0: User Configuration"
+
+Write-Host "================================================================" -ForegroundColor Yellow
+Write-Host "       WSL Development Environment Setup                        " -ForegroundColor Yellow
+Write-Host "================================================================" -ForegroundColor Yellow
+Write-Host ""
+
+# Collect user information if not provided as parameters
+if (-not $UserFullName) {
+    $UserFullName = Read-Host "Enter your full name (for Git commits)"
+}
+if (-not $UserEmail) {
+    $UserEmail = Read-Host "Enter your email (for Git/SSH)"
+}
+if (-not $UserGithub) {
+    $UserGithub = Read-Host "Enter your GitHub username"
+}
+if (-not $UserGitlab) {
+    $gitlabResponse = Read-Host "Enter your GitLab username (or press Enter to skip)"
+    if ($gitlabResponse) { $UserGitlab = $gitlabResponse }
+}
+if (-not $GitlabServer -and $UserGitlab) {
+    $gitlabServerResponse = Read-Host "Enter GitLab server URL (e.g., gitlab.company.com, or press Enter for gitlab.com)"
+    if ($gitlabServerResponse) { $GitlabServer = $gitlabServerResponse }
+}
+
+Write-Host ""
+Write-Host "Configuration Summary:" -ForegroundColor Cyan
+Write-Host "  Name:     $UserFullName" -ForegroundColor Gray
+Write-Host "  Email:    $UserEmail" -ForegroundColor Gray
+Write-Host "  GitHub:   $UserGithub" -ForegroundColor Gray
+if ($UserGitlab) {
+    Write-Host "  GitLab:   $UserGitlab" -ForegroundColor Gray
+    if ($GitlabServer) {
+        Write-Host "  GitLab Server: $GitlabServer" -ForegroundColor Gray
+    }
+}
+Write-Host ""
+
+$confirm = Read-Host "Continue with this configuration? (y/n)"
+if ($confirm -ne 'y') {
+    Write-Warn "Setup cancelled. Run again with correct information."
+    exit 0
+}
+
+Write-Success "Configuration confirmed"
+
+# ============================================================================
 # STEP 1: WSL2 Installation
 # ============================================================================
 
@@ -304,13 +355,19 @@ if (-not $SkipWindowsApps) {
 
 Write-Step "Step 5/6: SSH and GPG Key Configuration"
 
-# Get WSL user
+# Get WSL user - must run as specific user, not root
 $wslUser = (wsl whoami 2>$null) -replace '\s+', ''
+if (-not $wslUser -or $wslUser -eq "root") {
+    # When running as admin, WSL defaults to root - get the actual user
+    $wslUser = (wsl bash -c "ls /home | head -1" 2>$null) -replace '\s+', ''
+}
 if (-not $wslUser) { $wslUser = $env:USERNAME.ToLower() }
 
-# Get SSH public key directly from WSL (more reliable than UNC paths)
+Write-Info "Detected WSL user: $wslUser"
+
+# Get SSH public key using explicit home path (not ~ which may resolve to root)
 $sshPubKey = $null
-$sshKeyOutput = wsl bash -c "cat ~/.ssh/id_ed25519.pub 2>/dev/null" 2>$null
+$sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519.pub 2>/dev/null" 2>$null
 # Handle potential array output and clean up
 if ($sshKeyOutput) {
     $keyText = if ($sshKeyOutput -is [array]) { $sshKeyOutput -join "" } else { $sshKeyOutput.ToString() }
@@ -320,13 +377,13 @@ if ($sshKeyOutput) {
     }
 }
 
-# Get GPG key from WSL
+# Get GPG key from WSL (run as the actual user)
 $gpgPubKey = $null
-$gpgKeyId = wsl bash -c "gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E 'sec\s+' | head -1 | sed 's/.*\/\([A-F0-9]\+\).*/\1/'" 2>$null
+$gpgKeyId = wsl bash -c "sudo -u $wslUser gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E 'sec\s+' | head -1 | sed 's/.*\/\([A-F0-9]\+\).*/\1/'" 2>$null
 if ($gpgKeyId) {
     $gpgKeyId = $gpgKeyId.Trim()
     if ($gpgKeyId -match "^[A-F0-9]+$") {
-        $gpgPubKey = wsl bash -c "gpg --armor --export $gpgKeyId 2>/dev/null"
+        $gpgPubKey = wsl bash -c "sudo -u $wslUser gpg --armor --export $gpgKeyId 2>/dev/null"
     }
 }
 
