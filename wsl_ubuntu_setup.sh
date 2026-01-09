@@ -1618,8 +1618,24 @@ configure_containers() {
 
 install_modern_cli_tools() {
     if is_completed "modern_cli_tools"; then
-        print_info "Modern CLI tools already installed, skipping"
-        return 0
+        # Verify essential tools are actually installed before skipping
+        local tools_missing=0
+        for tool in lazygit lazydocker; do
+            if ! command -v "$tool" &>/dev/null && ! [ -f "$HOME/go/bin/$tool" ]; then
+                tools_missing=1
+                break
+            fi
+        done
+        if ! command -v atuin &>/dev/null && ! [ -f "$HOME/.atuin/bin/atuin" ]; then
+            tools_missing=1
+        fi
+        if [ $tools_missing -eq 1 ]; then
+            print_warning "Checkpoint set but tools missing, re-running installation..."
+            sed -i '/modern_cli_tools/d' "$CHECKPOINT_FILE" 2>/dev/null || true
+        else
+            print_info "Modern CLI tools already installed, skipping"
+            return 0
+        fi
     fi
 
     print_header "Installing Modern CLI Tools"
@@ -1801,8 +1817,14 @@ EOF
 
 install_claude_code() {
     if is_completed "claude_code"; then
-        print_info "Claude Code already installed, skipping"
-        return 0
+        # Verify claude is actually installed before skipping
+        if ! command -v claude &>/dev/null; then
+            print_warning "Checkpoint set but claude missing, re-running installation..."
+            sed -i '/claude_code/d' "$CHECKPOINT_FILE" 2>/dev/null || true
+        else
+            print_info "Claude Code already installed, skipping"
+            return 0
+        fi
     fi
 
     # Check if Claude is already installed (native installation)

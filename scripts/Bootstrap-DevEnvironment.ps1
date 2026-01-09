@@ -315,6 +315,9 @@ if (-not $SkipWindowsApps) {
         Install-WingetApp -AppId "Tailscale.Tailscale" -AppName "Tailscale VPN"
         Install-WingetApp -AppId "Microsoft.PowerShell" -AppName "PowerShell 7"
 
+        # Nerd Font for terminal (required for Oh My Posh icons)
+        Install-WingetApp -AppId "DEVCOM.JetBrainsMonoNerdFont" -AppName "JetBrainsMono Nerd Font"
+
         # Development tools
         Install-WingetApp -AppId "ZedIndustries.Zed" -AppName "Zed Editor"
         Install-WingetApp -AppId "xpipe-io.xpipe" -AppName "XPipe"
@@ -365,9 +368,10 @@ if (-not $wslUser) { $wslUser = $env:USERNAME.ToLower() }
 
 Write-Info "Detected WSL user: $wslUser"
 
-# Get SSH public key using explicit home path (not ~ which may resolve to root)
+# Get SSH public key - run as the specific user to avoid root context issues
 $sshPubKey = $null
-$sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519.pub 2>/dev/null" 2>$null
+# Use wsl -u to run as specific user, avoiding admin/root context issues
+$sshKeyOutput = wsl -u $wslUser -- cat /home/$wslUser/.ssh/id_ed25519.pub 2>$null
 # Handle potential array output and clean up
 if ($sshKeyOutput) {
     $keyText = if ($sshKeyOutput -is [array]) { $sshKeyOutput -join "" } else { $sshKeyOutput.ToString() }
@@ -515,6 +519,7 @@ Write-Host ""
 Write-Host "Installed Windows Apps:" -ForegroundColor Yellow
 Write-Host "  - Tailscale VPN" -ForegroundColor Gray
 Write-Host "  - PowerShell 7" -ForegroundColor Gray
+Write-Host "  - JetBrainsMono Nerd Font" -ForegroundColor Gray
 Write-Host "  - Zed Editor" -ForegroundColor Gray
 Write-Host "  - XPipe" -ForegroundColor Gray
 Write-Host "  - Claude Desktop" -ForegroundColor Gray
@@ -527,8 +532,7 @@ Write-Host "  1. Restart WSL:        wsl --shutdown" -ForegroundColor Cyan
 Write-Host "  2. Authenticate Tailscale:" -ForegroundColor Cyan
 Write-Host "     - Windows: tailscale up" -ForegroundColor Gray
 Write-Host "     - WSL:     sudo tailscale up" -ForegroundColor Gray
-Write-Host "  3. Install Nerd Font:  JetBrainsMono from nerdfonts.com" -ForegroundColor Cyan
-Write-Host "  4. Set terminal font:  Windows Terminal -> Settings -> Ubuntu" -ForegroundColor Cyan
+Write-Host "  3. Set terminal font:  Windows Terminal -> Settings -> Ubuntu -> JetBrainsMono Nerd Font" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "Test SSH connections:" -ForegroundColor Yellow
