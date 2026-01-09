@@ -271,7 +271,24 @@ if (-not $SkipWindowsApps) {
 
         # Browsers and media
         Install-WingetApp -AppId "Mozilla.Firefox" -AppName "Mozilla Firefox"
-        Install-WingetApp -AppId "Spotify.Spotify" -AppName "Spotify" -ExtraArgs "--scope user"
+
+        # Spotify requires non-admin context - install separately
+        $spotifyInstalled = winget list --id Spotify.Spotify 2>$null | Select-String "Spotify"
+        if ($spotifyInstalled) {
+            Write-Success "Spotify already installed"
+        } else {
+            Write-Info "Installing Spotify (requires non-admin - opening separate installer)..."
+            # Download and run Spotify web installer which handles this properly
+            $spotifyUrl = "https://download.scdn.co/SpotifySetup.exe"
+            $spotifyPath = "$env:TEMP\SpotifySetup.exe"
+            try {
+                Invoke-WebRequest -Uri $spotifyUrl -OutFile $spotifyPath -UseBasicParsing
+                Start-Process -FilePath $spotifyPath -Wait
+                Write-Success "Spotify installer launched"
+            } catch {
+                Write-Warn "Spotify: Install manually from spotify.com/download"
+            }
+        }
 
         # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -293,16 +310,24 @@ if (-not $wslUser) { $wslUser = $env:USERNAME.ToLower() }
 
 # Get SSH public key directly from WSL (more reliable than UNC paths)
 $sshPubKey = $null
-$sshKeyOutput = wsl cat ~/.ssh/id_ed25519.pub 2>$null
-if ($sshKeyOutput -and $sshKeyOutput -match "^ssh-") {
-    $sshPubKey = $sshKeyOutput
+$sshKeyOutput = wsl bash -c "cat ~/.ssh/id_ed25519.pub 2>/dev/null" 2>$null
+# Handle potential array output and clean up
+if ($sshKeyOutput) {
+    $keyText = if ($sshKeyOutput -is [array]) { $sshKeyOutput -join "" } else { $sshKeyOutput.ToString() }
+    $keyText = $keyText.Trim()
+    if ($keyText -like "ssh-*") {
+        $sshPubKey = $keyText
+    }
 }
 
 # Get GPG key from WSL
 $gpgPubKey = $null
-$gpgKeyId = wsl bash -c "gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -oP '(?<=sec\s{3}\w{4,5}\/)[A-F0-9]+' | head -1" 2>$null
-if ($gpgKeyId -and $gpgKeyId.Trim()) {
-    $gpgPubKey = wsl gpg --armor --export $($gpgKeyId.Trim()) 2>$null
+$gpgKeyId = wsl bash -c "gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E 'sec\s+' | head -1 | sed 's/.*\/\([A-F0-9]\+\).*/\1/'" 2>$null
+if ($gpgKeyId) {
+    $gpgKeyId = $gpgKeyId.Trim()
+    if ($gpgKeyId -match "^[A-F0-9]+$") {
+        $gpgPubKey = wsl bash -c "gpg --armor --export $gpgKeyId 2>/dev/null"
+    }
 }
 
 Write-Host ""

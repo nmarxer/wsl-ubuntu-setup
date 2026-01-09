@@ -2372,6 +2372,11 @@ EOF
 ################################################################################
 
 show_windows_integration_guide() {
+    # Skip in orchestrated mode (PowerShell bootstrap handles Windows setup)
+    if [ "$ORCHESTRATED_MODE" = "1" ]; then
+        return 0
+    fi
+
     print_header "Windows-WSL Integration Guide"
 
     echo ""
@@ -2761,6 +2766,9 @@ resume_install() {
 ################################################################################
 
 orchestrated_install() {
+    # Set orchestrated mode flag (skips interactive prompts)
+    export ORCHESTRATED_MODE=1
+
     print_header "Orchestrated Installation (PowerShell mode)"
 
     # Ask for sudo password upfront
