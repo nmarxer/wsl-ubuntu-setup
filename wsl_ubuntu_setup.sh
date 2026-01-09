@@ -1620,15 +1620,14 @@ install_modern_cli_tools() {
     if is_completed "modern_cli_tools"; then
         # Verify essential tools are actually installed before skipping
         local tools_missing=0
-        for tool in lazygit lazydocker; do
-            if ! command -v "$tool" &>/dev/null && ! [ -f "$HOME/go/bin/$tool" ]; then
-                tools_missing=1
-                break
-            fi
-        done
-        if ! command -v atuin &>/dev/null && ! [ -f "$HOME/.atuin/bin/atuin" ]; then
-            tools_missing=1
-        fi
+
+        # Check lazygit/lazydocker in go bin
+        [ ! -f "$HOME/go/bin/lazygit" ] && tools_missing=1
+        [ ! -f "$HOME/go/bin/lazydocker" ] && tools_missing=1
+
+        # Check atuin
+        [ ! -f "$HOME/.atuin/bin/atuin" ] && tools_missing=1
+
         if [ $tools_missing -eq 1 ]; then
             print_warning "Checkpoint set but tools missing, re-running installation..."
             sed -i '/modern_cli_tools/d' "$CHECKPOINT_FILE" 2>/dev/null || true
@@ -1816,6 +1815,10 @@ EOF
 ################################################################################
 
 install_claude_code() {
+    # Source nvm to check npm-installed packages
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
+
     if is_completed "claude_code"; then
         # Verify claude is actually installed before skipping
         if ! command -v claude &>/dev/null; then
@@ -1828,7 +1831,7 @@ install_claude_code() {
     fi
 
     # Check if Claude is already installed (native installation)
-    if command_exists claude; then
+    if command -v claude &>/dev/null; then
         print_success "Claude Code already installed (native installation detected)"
         claude --version 2>/dev/null || true
         mark_completed "claude_code"
@@ -2567,6 +2570,36 @@ verify_installation() {
             bun)
                 if [ -f "$HOME/.bun/bin/bun" ]; then
                     version=$("$HOME/.bun/bin/bun" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            lazygit)
+                # Installed via go install to ~/go/bin/
+                if [ -f "$HOME/go/bin/lazygit" ]; then
+                    version=$("$HOME/go/bin/lazygit" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            lazydocker)
+                # Installed via go install to ~/go/bin/
+                if [ -f "$HOME/go/bin/lazydocker" ]; then
+                    version=$("$HOME/go/bin/lazydocker" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            atuin)
+                # Installed to ~/.atuin/bin/
+                if [ -f "$HOME/.atuin/bin/atuin" ]; then
+                    version=$("$HOME/.atuin/bin/atuin" --version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                ;;
+            claude)
+                # Installed via npm global, need nvm
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
+                if command -v claude &>/dev/null; then
+                    version=$(claude --version 2>&1 | head -1 | cut -c1-50)
                     [ -n "$version" ] && echo "$version" && return 0
                 fi
                 ;;
