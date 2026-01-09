@@ -1815,42 +1815,21 @@ EOF
 ################################################################################
 
 install_claude_code() {
-    if is_completed "claude_code"; then
-        # Verify claude is actually installed before skipping
-        # Claude installs to ~/.claude/local/bin/claude
-        if ! command -v claude &>/dev/null && [ ! -f "$HOME/.claude/local/bin/claude" ]; then
-            print_warning "Checkpoint set but claude missing, re-running installation..."
-            sed -i '/claude_code/d' "$CHECKPOINT_FILE" 2>/dev/null || true
-        else
-            print_info "Claude Code already installed, skipping"
-            return 0
-        fi
-    fi
+    # Source nvm to ensure PATH includes npm binaries
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
 
-    # Check if Claude is already installed
-    # Claude installs to ~/.claude/local/bin/claude
-    if command -v claude &>/dev/null || [ -f "$HOME/.claude/local/bin/claude" ]; then
+    # Check if claude command is available
+    if command -v claude &>/dev/null; then
         print_success "Claude Code already installed"
-        claude --version 2>/dev/null || "$HOME/.claude/local/bin/claude" --version 2>/dev/null || true
         mark_completed "claude_code"
         return 0
     fi
 
     print_header "Installing Claude Code CLI"
 
-    # Use official installer
+    # Official installer
     curl -fsSL https://claude.ai/install.sh | bash
-
-    # Add to PATH for current session
-    export PATH="$HOME/.claude/local/bin:$PATH"
-
-    # Verify installation
-    if command -v claude &>/dev/null || [ -f "$HOME/.claude/local/bin/claude" ]; then
-        print_success "Claude Code installed"
-        claude --version 2>/dev/null || true
-    else
-        print_warning "Claude Code installation may have failed"
-    fi
 
     mark_completed "claude_code"
 }
@@ -2599,9 +2578,11 @@ verify_installation() {
                 fi
                 ;;
             claude)
-                # Installed via official installer to ~/.claude/local/bin/
-                if [ -f "$HOME/.claude/local/bin/claude" ]; then
-                    version=$("$HOME/.claude/local/bin/claude" --version 2>&1 | head -1 | cut -c1-50)
+                # Source nvm first, then check command
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 2>/dev/null
+                if command -v claude &>/dev/null; then
+                    version=$(claude --version 2>&1 | head -1 | cut -c1-50)
                     [ -n "$version" ] && echo "$version" && return 0
                 fi
                 ;;
