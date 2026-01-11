@@ -63,7 +63,21 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 ################################################################################
+# MODULAR LIBRARY LOADING
+# Source lib/*.sh files if they exist (for modular installation)
+# Inline functions below serve as fallback for single-file execution
+################################################################################
+
+LIB_DIR="$SCRIPT_DIR/lib"
+if [ -d "$LIB_DIR" ]; then
+    for lib_file in "$LIB_DIR"/*.sh; do
+        [ -f "$lib_file" ] && source "$lib_file"
+    done
+fi
+
+################################################################################
 # HELPER FUNCTIONS
+# Note: These may be overridden by lib/core.sh if lib/ directory exists
 ################################################################################
 
 # Logging function
@@ -361,6 +375,57 @@ retry_fetch() {
 
     log "ERROR" "Fetch failed after $max_retries attempts: $url"
     return 1
+}
+
+# Copy dotfile from local repo or download from GitHub
+# Usage: copy_or_download_dotfile "source_name" "dest_path" [--force] [--chmod MODE]
+# Example: copy_or_download_dotfile "tmux.conf" "$HOME/.tmux.conf" --chmod 644
+copy_or_download_dotfile() {
+    local src_name="$1"
+    local dst_path="$2"
+    shift 2
+
+    # Parse optional flags
+    local force=false
+    local chmod_mode=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) force=true; shift ;;
+            --chmod) chmod_mode="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
+    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
+    local local_src="$dotfiles_dir/$src_name"
+    local github_url="$github_base/$src_name"
+
+    # Skip if destination exists (unless --force)
+    if [ -f "$dst_path" ] && [ "$force" = false ]; then
+        print_info "$dst_path already exists, skipping"
+        return 0
+    fi
+
+    # Ensure destination directory exists
+    local dst_dir
+    dst_dir=$(dirname "$dst_path")
+    [ -d "$dst_dir" ] || mkdir -p "$dst_dir"
+
+    # Try local file first, then GitHub
+    if [ -f "$local_src" ]; then
+        cp "$local_src" "$dst_path"
+        [ -n "$chmod_mode" ] && chmod "$chmod_mode" "$dst_path"
+        print_success "$(basename "$dst_path") installed from repo"
+        return 0
+    elif curl -fsSL "$github_url" -o "$dst_path" 2>/dev/null; then
+        [ -n "$chmod_mode" ] && chmod "$chmod_mode" "$dst_path"
+        print_success "$(basename "$dst_path") downloaded from GitHub"
+        return 0
+    else
+        print_error "Could not install $(basename "$dst_path") (local not found, download failed)"
+        return 1
+    fi
 }
 
 # Sudo wrapper - uses cached credentials
@@ -986,45 +1051,19 @@ install_ohmyposh_theme() {
 
 install_dotfiles() {
     # Install dotfiles from repo or download from GitHub
-    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
-    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
+    # Uses copy_or_download_dotfile() helper for consistent local/GitHub fallback
 
     # Create directories
     mkdir -p ~/.zshrc.d
 
-    # Helper to install a dotfile (local or download)
-    install_dotfile() {
-        local src_name="$1"
-        local dst_path="$2"
-        local local_src="$dotfiles_dir/$src_name"
-        local github_url="$github_base/$src_name"
-
-        # Skip if destination already exists
-        if [ -f "$dst_path" ]; then
-            print_info "$dst_path already exists, skipping"
-            return 0
-        fi
-
-        if [ -f "$local_src" ]; then
-            cp "$local_src" "$dst_path"
-            print_success "$dst_path installed from local repo"
-        elif curl -fsSL "$github_url" -o "$dst_path" 2>/dev/null; then
-            print_success "$dst_path downloaded from GitHub"
-        else
-            print_warning "Could not install $dst_path"
-            return 1
-        fi
-    }
-
     # Install main dotfiles
-    install_dotfile "zshrc" "$HOME/.zshrc"
-    install_dotfile "tmux.conf" "$HOME/.tmux.conf"
-    [ -f "$HOME/.tmux.conf" ] && chmod 644 "$HOME/.tmux.conf"
+    copy_or_download_dotfile "zshrc" "$HOME/.zshrc"
+    copy_or_download_dotfile "tmux.conf" "$HOME/.tmux.conf" --chmod 644
 
     # Install zshrc.d files
     local zshrc_d_files=("aliases.zsh" "functions.zsh" "personal.zsh" "tmux.zsh")
     for zsh_file in "${zshrc_d_files[@]}"; do
-        install_dotfile "zshrc.d/$zsh_file" "$HOME/.zshrc.d/$zsh_file"
+        copy_or_download_dotfile "zshrc.d/$zsh_file" "$HOME/.zshrc.d/$zsh_file"
     done
 }
 
@@ -1684,25 +1723,8 @@ install_powershell() {
     # Configure Oh My Posh for PowerShell (always run - even if PowerShell was already installed)
     print_info "Configuring Oh My Posh for PowerShell..."
 
-    # Create PowerShell profile directory if it doesn't exist
-    local pwsh_profile_dir="$HOME/.config/powershell"
-    mkdir -p "$pwsh_profile_dir"
-
-    # Copy PowerShell profile from dotfiles (local or download from GitHub)
-    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
-    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
-    local ps_profile_src="$dotfiles_dir/Microsoft.PowerShell_profile.ps1"
-    local pwsh_profile="$pwsh_profile_dir/Microsoft.PowerShell_profile.ps1"
-
-    if [ -f "$ps_profile_src" ]; then
-        cp "$ps_profile_src" "$pwsh_profile"
-        print_success "PowerShell profile installed from repo"
-    elif curl -fsSL "$github_base/Microsoft.PowerShell_profile.ps1" -o "$pwsh_profile" 2>/dev/null; then
-        print_success "PowerShell profile downloaded from GitHub"
-    else
-        print_error "Could not install PowerShell profile (local not found, download failed)"
-        return 1
-    fi
+    # Install PowerShell profile using helper (handles local/GitHub fallback)
+    copy_or_download_dotfile "Microsoft.PowerShell_profile.ps1" "$HOME/.config/powershell/Microsoft.PowerShell_profile.ps1" --force || return 1
 
     print_info "Oh My Posh will use same Catppuccin Mocha theme as Zsh"
 
@@ -1778,32 +1800,10 @@ configure_windows_powershell() {
     local win_ps5_dir="$win_docs_dir/WindowsPowerShell"
     mkdir -p "$win_ps7_dir" "$win_ps5_dir"
 
-    # Copy PowerShell profile from dotfiles (local or download from GitHub)
-    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
-    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
-    local ps_profile="$dotfiles_dir/Microsoft.PowerShell_profile.ps1"
-    local tmp_profile=""
-
-    # Get the profile (local or download)
-    if [ -f "$ps_profile" ]; then
-        # Use local file
-        cp "$ps_profile" "$win_ps7_dir/Microsoft.PowerShell_profile.ps1"
-        cp "$ps_profile" "$win_ps5_dir/Microsoft.PowerShell_profile.ps1"
-        print_success "Windows PowerShell profiles installed from repo"
-    else
-        # Download from GitHub
-        tmp_profile=$(mktemp)
-        if curl -fsSL "$github_base/Microsoft.PowerShell_profile.ps1" -o "$tmp_profile" 2>/dev/null; then
-            cp "$tmp_profile" "$win_ps7_dir/Microsoft.PowerShell_profile.ps1"
-            cp "$tmp_profile" "$win_ps5_dir/Microsoft.PowerShell_profile.ps1"
-            rm -f "$tmp_profile"
-            print_success "Windows PowerShell profiles downloaded from GitHub"
-        else
-            rm -f "$tmp_profile"
-            print_error "Could not install Windows PowerShell profile"
-            return 1
-        fi
-    fi
+    # Install PowerShell profile to PS7 directory, then copy to PS5
+    copy_or_download_dotfile "Microsoft.PowerShell_profile.ps1" "$win_ps7_dir/Microsoft.PowerShell_profile.ps1" --force || return 1
+    cp "$win_ps7_dir/Microsoft.PowerShell_profile.ps1" "$win_ps5_dir/Microsoft.PowerShell_profile.ps1"
+    print_success "Windows PowerShell profiles installed (PS7 + PS5)"
 
     # Install Nerd Font on Windows (copy and register)
     local win_fonts_dir="$win_home/AppData/Local/Microsoft/Windows/Fonts"
@@ -2209,21 +2209,8 @@ install_tmux_config() {
         print_success "TPM (tmux Plugin Manager) installed"
     fi
 
-    # Copy tmux.conf from dotfiles (local or download from GitHub)
-    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
-    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
-
-    if [ -f "$dotfiles_dir/tmux.conf" ]; then
-        cp "$dotfiles_dir/tmux.conf" ~/.tmux.conf
-        chmod 644 ~/.tmux.conf
-        print_success "tmux.conf installed from repo"
-    elif curl -fsSL "$github_base/tmux.conf" -o ~/.tmux.conf 2>/dev/null; then
-        chmod 644 ~/.tmux.conf
-        print_success "tmux.conf downloaded from GitHub"
-    else
-        print_error "Could not install tmux.conf (local not found, download failed)"
-        return 1
-    fi
+    # Install tmux.conf using helper (handles local/GitHub fallback)
+    copy_or_download_dotfile "tmux.conf" "$HOME/.tmux.conf" --force --chmod 644 || return 1
 
     print_success "tmux configured with Windows clipboard integration"
     print_info "Install plugins: start tmux then press Ctrl+B followed by I"
