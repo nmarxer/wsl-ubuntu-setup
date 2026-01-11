@@ -2445,10 +2445,12 @@ show_ssh_key_info() {
         echo "  - GitLab: https://gitlab.com/-/profile/keys"
         echo ""
 
-        # Copy to clipboard if possible
+        # Copy to clipboard if possible (WSL interop can sometimes fail)
         if command_exists clip.exe; then
-            cat "$ssh_key_path" | clip.exe
-            print_success "SSH key copied to Windows clipboard (Ctrl+V to paste)"
+            if cat "$ssh_key_path" | clip.exe 2>/dev/null; then
+                print_success "SSH key copied to Windows clipboard (Ctrl+V to paste)"
+            fi
+            # Silently skip if clip.exe fails (binfmt_misc issues in some WSL configs)
         fi
     else
         print_warning "No SSH key found at ~/.ssh/id_ed25519.pub"
@@ -2485,18 +2487,53 @@ verify_installation() {
 
     # Helper function to check command with fallback paths
     # Tools installed via version managers (nvm, pyenv, go) need special handling
+    # Some commands need special version syntax (go, kubectl, helm)
     check_cmd_version() {
         local cmd="$1"
         local version=""
 
-        # First try: direct command (in PATH)
+        # Commands that need special version syntax (not --version)
+        case "$cmd" in
+            go)
+                # go uses "go version" not "go --version"
+                if command -v go &>/dev/null; then
+                    version=$(go version 2>&1 | head -1 | cut -c1-50)
+                    echo "$version"
+                    return 0
+                elif [ -d "/usr/local/go" ]; then
+                    version=$(/usr/local/go/bin/go version 2>&1 | head -1 | cut -c1-50)
+                    [ -n "$version" ] && echo "$version" && return 0
+                fi
+                return 1
+                ;;
+            kubectl)
+                # kubectl uses "kubectl version --client"
+                if command -v kubectl &>/dev/null; then
+                    version=$(kubectl version --client --short 2>/dev/null || kubectl version --client 2>&1 | head -1 | cut -c1-50)
+                    echo "$version"
+                    return 0
+                fi
+                return 1
+                ;;
+            helm)
+                # helm uses "helm version"
+                if command -v helm &>/dev/null; then
+                    version=$(helm version --short 2>/dev/null || helm version 2>&1 | head -1 | cut -c1-50)
+                    echo "$version"
+                    return 0
+                fi
+                return 1
+                ;;
+        esac
+
+        # Generic: direct command (in PATH) using --version
         if command -v "$cmd" &>/dev/null; then
             version=$("$cmd" --version 2>&1 | head -1 | cut -c1-50)
             echo "$version"
             return 0
         fi
 
-        # Second try: check known installation paths
+        # Fallback: check known installation paths
         case "$cmd" in
             node|npm)
                 if [ -d "$HOME/.nvm" ]; then
@@ -2507,12 +2544,6 @@ verify_installation() {
                         version=$("$cmd" --version 2>&1 | head -1 | cut -c1-50)
                         [ -n "$version" ] && echo "$version" && return 0
                     fi
-                fi
-                ;;
-            go)
-                if [ -d "/usr/local/go" ]; then
-                    version=$(/usr/local/go/bin/go version 2>&1 | head -1 | cut -c1-50)
-                    [ -n "$version" ] && echo "$version" && return 0
                 fi
                 ;;
             oh-my-posh)
