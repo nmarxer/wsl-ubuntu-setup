@@ -58,7 +58,14 @@ setup() {
             print_error "$var_name cannot be empty"
             return 1
         fi
-        if [[ "$var_value" =~ [\$\`\|\;\&\>\<\(\)\[\]\{\}\\] ]]; then
+        # Use glob patterns for reliable metacharacter detection
+        if [[ "$var_value" == *'$'* ]] || [[ "$var_value" == *'`'* ]] || \
+           [[ "$var_value" == *'|'* ]] || [[ "$var_value" == *';'* ]] || \
+           [[ "$var_value" == *'&'* ]] || [[ "$var_value" == *'>'* ]] || \
+           [[ "$var_value" == *'<'* ]] || [[ "$var_value" == *'('* ]] || \
+           [[ "$var_value" == *')'* ]] || [[ "$var_value" == *'['* ]] || \
+           [[ "$var_value" == *']'* ]] || [[ "$var_value" == *'{'* ]] || \
+           [[ "$var_value" == *'}'* ]] || [[ "$var_value" == *'\'* ]]; then
             print_error "$var_name contains invalid characters (shell metacharacters not allowed)"
             log "SECURITY" "Blocked $var_name with shell metacharacters"
             return 1
@@ -249,7 +256,8 @@ teardown() {
 # =============================================================================
 
 @test "security events are logged with timestamp" {
-    validate_user_input "USER_EMAIL" 'test;injection@evil.com' 2>/dev/null || true
+    # Use USER_FULLNAME to bypass email validation and trigger metacharacter check
+    validate_user_input "USER_FULLNAME" 'test;injection' 2>/dev/null || true
     run cat "$LOG_FILE"
     [[ "$output" == *"SECURITY"* ]]
     [[ "$output" == *"20"* ]]  # Year in timestamp
@@ -292,24 +300,24 @@ teardown() {
 # verify_download_script tests (function signature test)
 # =============================================================================
 
-@test "verify_download_script function exists in script" {
-    # This test verifies the function is defined in the main script
-    run grep -q "verify_download_script()" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "verify_download_script function exists in lib/core.sh" {
+    # Functions moved to lib/core.sh for modularity
+    run grep -q "verify_download_script()" "$SCRIPT_DIR/lib/core.sh"
     [ "$status" -eq 0 ]
 }
 
-@test "validate_repo_entry function exists in script" {
-    run grep -q "validate_repo_entry()" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "validate_repo_entry function exists in lib/core.sh" {
+    run grep -q "validate_repo_entry()" "$SCRIPT_DIR/lib/core.sh"
     [ "$status" -eq 0 ]
 }
 
-@test "validate_user_input function exists in script" {
-    run grep -q "validate_user_input()" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "validate_user_input function exists in lib/core.sh" {
+    run grep -q "validate_user_input()" "$SCRIPT_DIR/lib/core.sh"
     [ "$status" -eq 0 ]
 }
 
-@test "retry_fetch function exists in script" {
-    run grep -q "retry_fetch()" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "retry_fetch function exists in lib/core.sh" {
+    run grep -q "retry_fetch()" "$SCRIPT_DIR/lib/core.sh"
     [ "$status" -eq 0 ]
 }
 

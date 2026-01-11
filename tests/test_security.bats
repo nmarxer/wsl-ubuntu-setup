@@ -68,13 +68,15 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "main script validates HTTPS in secure_download_run" {
-    run grep -A10 "secure_download_run()" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "lib/core.sh validates HTTPS in secure_download_run" {
+    # Function moved to lib/core.sh for modularity
+    run grep -A10 "secure_download_run()" "$SCRIPT_DIR/lib/core.sh"
     [[ "$output" == *"https://"* ]]
 }
 
-@test "main script clears SUDO_PASSWORD after use" {
-    run grep -q "unset SUDO_PASSWORD" "$SCRIPT_DIR/wsl_ubuntu_setup.sh"
+@test "lib/core.sh clears SUDO_PASSWORD after use" {
+    # Function moved to lib/core.sh for modularity
+    run grep -q "unset SUDO_PASSWORD" "$SCRIPT_DIR/lib/core.sh"
     [ "$status" -eq 0 ]
 }
 

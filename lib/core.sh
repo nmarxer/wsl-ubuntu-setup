@@ -153,7 +153,14 @@ validate_user_input() {
     fi
 
     # Reject shell metacharacters (command injection prevention)
-    if [[ "$var_value" =~ [\$\`\|\;\&\>\<\(\)\[\]\{\}\\] ]]; then
+    # Use glob patterns instead of regex for reliable metacharacter detection
+    if [[ "$var_value" == *'$'* ]] || [[ "$var_value" == *'`'* ]] || \
+       [[ "$var_value" == *'|'* ]] || [[ "$var_value" == *';'* ]] || \
+       [[ "$var_value" == *'&'* ]] || [[ "$var_value" == *'>'* ]] || \
+       [[ "$var_value" == *'<'* ]] || [[ "$var_value" == *'('* ]] || \
+       [[ "$var_value" == *')'* ]] || [[ "$var_value" == *'['* ]] || \
+       [[ "$var_value" == *']'* ]] || [[ "$var_value" == *'{'* ]] || \
+       [[ "$var_value" == *'}'* ]] || [[ "$var_value" == *'\'* ]]; then
         print_error "$var_name contains invalid characters (shell metacharacters not allowed)"
         log "SECURITY" "Blocked $var_name with shell metacharacters"
         return 1
