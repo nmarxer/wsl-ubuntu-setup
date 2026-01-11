@@ -1,25 +1,5 @@
-# === TMUX AUTO-START ===
-# Automatically start tmux when opening a new shell
-
-# Conditions to skip tmux:
-# - Already inside tmux
-# - Running in VS Code integrated terminal
-# - Running in non-interactive mode
-# - tmux not installed
-
-if command -v tmux &> /dev/null && \
-   [ -z "$TMUX" ] && \
-   [ -z "$VSCODE_INJECTION" ] && \
-   [ -z "$VSCODE_GIT_ASKPASS_NODE" ] && \
-   [[ $- == *i* ]]; then
-
-    # Try to attach to existing session, or create new one
-    if tmux has-session -t main 2>/dev/null; then
-        exec tmux attach-session -t main
-    else
-        exec tmux new-session -s main
-    fi
-fi
+# === TMUX CONFIGURATION ===
+# Auto-start disabled - use 'tmux' or aliases below to start manually
 
 # Tmux shortcuts
 alias ta="tmux attach -t"
