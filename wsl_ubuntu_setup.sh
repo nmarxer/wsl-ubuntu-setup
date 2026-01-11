@@ -2095,23 +2095,41 @@ configure_ssh_gpg() {
         print_success "Existing SSH keys detected"
         ls -la ~/.ssh/id_* 2>/dev/null | head -5
 
-        # Check for existing GPG keys
+        # Check for existing GPG keys - generate if missing
         if gpg --list-secret-keys "$USER_EMAIL" &>/dev/null; then
             print_success "Existing GPG key detected for $USER_EMAIL"
-            # Configure GPG signing if key exists
             local gpg_key_id=$(gpg --list-secret-keys --keyid-format=long "$USER_EMAIL" 2>/dev/null | grep sec | awk '{print $2}' | cut -d'/' -f2 | head -1)
-            if [ -n "$gpg_key_id" ]; then
-                git config --global user.signingkey "$gpg_key_id"
-                git config --global commit.gpgsign true
-                git config --global tag.gpgsign true
-                print_success "GPG signing configured with key $gpg_key_id"
-            fi
-            # Configure GPG agent for WSL (fixes pinentry issues in tmux/screen)
-            mkdir -p ~/.gnupg
-            chmod 700 ~/.gnupg
-            copy_or_download_dotfile "gpg-agent.conf" "$HOME/.gnupg/gpg-agent.conf" --chmod 600
-            gpgconf --kill gpg-agent 2>/dev/null || true
+        else
+            # Generate GPG key if missing (no passphrase for automation)
+            print_info "Generating GPG key (no passphrase for automation)..."
+            gpg --batch --generate-key << GPGEOF
+Key-Type: RSA
+Key-Length: 4096
+Subkey-Type: RSA
+Subkey-Length: 4096
+Name-Real: $USER_FULLNAME
+Name-Email: $USER_EMAIL
+Expire-Date: 2y
+%no-protection
+%commit
+GPGEOF
+            local gpg_key_id=$(gpg --list-secret-keys --keyid-format=long "$USER_EMAIL" 2>/dev/null | grep sec | awk '{print $2}' | cut -d'/' -f2 | head -1)
+            print_success "GPG key generated: $gpg_key_id"
         fi
+
+        # Configure GPG signing
+        if [ -n "$gpg_key_id" ]; then
+            git config --global user.signingkey "$gpg_key_id"
+            git config --global commit.gpgsign true
+            git config --global tag.gpgsign true
+            print_success "GPG signing configured with key $gpg_key_id"
+        fi
+
+        # Configure GPG agent for WSL (fixes pinentry issues in tmux/screen)
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        copy_or_download_dotfile "gpg-agent.conf" "$HOME/.gnupg/gpg-agent.conf" --chmod 600
+        gpgconf --kill gpg-agent 2>/dev/null || true
 
         mark_completed "ssh_gpg"
         return 0
