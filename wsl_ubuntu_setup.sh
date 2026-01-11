@@ -2209,16 +2209,19 @@ install_tmux_config() {
         print_success "TPM (tmux Plugin Manager) installed"
     fi
 
-    # Copy tmux.conf from dotfiles
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local dotfiles_dir="$script_dir/dotfiles"
+    # Copy tmux.conf from dotfiles (local or download from GitHub)
+    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
+    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
 
     if [ -f "$dotfiles_dir/tmux.conf" ]; then
         cp "$dotfiles_dir/tmux.conf" ~/.tmux.conf
         chmod 644 ~/.tmux.conf
         print_success "tmux.conf installed from repo"
+    elif curl -fsSL "$github_base/tmux.conf" -o ~/.tmux.conf 2>/dev/null; then
+        chmod 644 ~/.tmux.conf
+        print_success "tmux.conf downloaded from GitHub"
     else
-        print_error "tmux.conf not found in dotfiles: $dotfiles_dir/tmux.conf"
+        print_error "Could not install tmux.conf (local not found, download failed)"
         return 1
     fi
 
