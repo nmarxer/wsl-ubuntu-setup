@@ -66,26 +66,44 @@ $RepoUrl = "https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main"
 
 function Write-Step {
     param([string]$Message)
-    Write-Host ""
-    Write-Host "===========================================================" -ForegroundColor Cyan
-    Write-Host "  $Message" -ForegroundColor Cyan
-    Write-Host "===========================================================" -ForegroundColor Cyan
-    Write-Host ""
+    [Console]::WriteLine()
+    [Console]::ForegroundColor = 'Cyan'
+    [Console]::WriteLine("===========================================================")
+    [Console]::WriteLine("  $Message")
+    [Console]::WriteLine("===========================================================")
+    [Console]::ResetColor()
+    [Console]::WriteLine()
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "[OK] $Message" -ForegroundColor Green
+    [Console]::ForegroundColor = 'Green'
+    [Console]::WriteLine("[OK] $Message")
+    [Console]::ResetColor()
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "-> $Message" -ForegroundColor Gray
+    [Console]::ForegroundColor = 'Gray'
+    [Console]::WriteLine("-> $Message")
+    [Console]::ResetColor()
 }
 
 function Write-Warn {
     param([string]$Message)
-    Write-Host "[!] $Message" -ForegroundColor Yellow
+    [Console]::ForegroundColor = 'Yellow'
+    [Console]::WriteLine("[!] $Message")
+    [Console]::ResetColor()
+}
+
+function Write-Color {
+    param(
+        [string]$Message,
+        [string]$Color = 'White'
+    )
+    [Console]::ForegroundColor = $Color
+    [Console]::WriteLine($Message)
+    [Console]::ResetColor()
 }
 
 function Install-WingetApp {
@@ -117,16 +135,16 @@ function Install-WingetApp {
 
 Write-Step "Phase 0: User Configuration"
 
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "       WSL Development Environment Setup                        " -ForegroundColor Yellow
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host ""
+Write-Color "================================================================" Yellow
+Write-Color "       WSL Development Environment Setup                        " Yellow
+Write-Color "================================================================" Yellow
+[Console]::WriteLine()
 
 # --------------------------------------------------------------------------
 # Phase 1: GitHub Configuration (Required)
 # --------------------------------------------------------------------------
-Write-Host "--- Phase 1/3: GitHub Configuration (Required) ---" -ForegroundColor Cyan
-Write-Host ""
+Write-Color "--- Phase 1/3: GitHub Configuration (Required) ---" Cyan
+[Console]::WriteLine()
 
 if (-not $UserFullName) {
     $UserFullName = Read-Host "Enter your full name (for Git commits)"
@@ -138,13 +156,13 @@ if (-not $UserGithubEmail) {
     $UserGithubEmail = Read-Host "Enter your GitHub email"
 }
 
-Write-Host ""
+[Console]::WriteLine()
 
 # --------------------------------------------------------------------------
 # Phase 2: GitLab Decision
 # --------------------------------------------------------------------------
-Write-Host "--- Phase 2/3: GitLab Configuration (Optional) ---" -ForegroundColor Cyan
-Write-Host ""
+Write-Color "--- Phase 2/3: GitLab Configuration (Optional) ---" Cyan
+[Console]::WriteLine()
 
 $configureGitlab = $false
 if ($UserGitlab -or $UserGitlabEmail -or $GitlabServer) {
@@ -159,9 +177,9 @@ if ($UserGitlab -or $UserGitlabEmail -or $GitlabServer) {
 # Phase 3: GitLab Details (if opted in)
 # --------------------------------------------------------------------------
 if ($configureGitlab) {
-    Write-Host ""
-    Write-Host "--- Phase 3/3: GitLab Details ---" -ForegroundColor Cyan
-    Write-Host ""
+    [Console]::WriteLine()
+    Write-Color "--- Phase 3/3: GitLab Details ---" Cyan
+    [Console]::WriteLine()
 
     if (-not $GitlabServer) {
         $gitlabServerResponse = Read-Host "Enter GitLab server URL (e.g., gitlab.company.com, or press Enter for gitlab.com)"
@@ -180,10 +198,10 @@ if ($configureGitlab) {
 
     # Ask which email to use for git config
     if (-not $UseGitlabForGit) {
-        Write-Host ""
-        Write-Host "Which email should Git use for commits?" -ForegroundColor Yellow
-        Write-Host "  1. GitHub email: $UserGithubEmail" -ForegroundColor Gray
-        Write-Host "  2. GitLab email: $UserGitlabEmail" -ForegroundColor Gray
+        [Console]::WriteLine()
+        Write-Color "Which email should Git use for commits?" Yellow
+        Write-Color "  1. GitHub email: $UserGithubEmail" Gray
+        Write-Color "  2. GitLab email: $UserGitlabEmail" Gray
         $gitEmailChoice = Read-Host "Choose (1 or 2, default: 1)"
         if ($gitEmailChoice -eq '2') {
             $UseGitlabForGit = $true
@@ -194,27 +212,27 @@ if ($configureGitlab) {
 # Determine which email to use for git config
 $GitEmail = if ($UseGitlabForGit -and $UserGitlabEmail) { $UserGitlabEmail } else { $UserGithubEmail }
 
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "Configuration Summary:" -ForegroundColor Cyan
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Full Name:      $UserFullName" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  GitHub:" -ForegroundColor Yellow
-Write-Host "    Username:     $UserGithub" -ForegroundColor Gray
-Write-Host "    Email:        $UserGithubEmail" -ForegroundColor Gray
+[Console]::WriteLine()
+Write-Color "================================================================" Cyan
+Write-Color "Configuration Summary:" Cyan
+Write-Color "================================================================" Cyan
+[Console]::WriteLine()
+Write-Color "  Full Name:      $UserFullName" Gray
+[Console]::WriteLine()
+Write-Color "  GitHub:" Yellow
+Write-Color "    Username:     $UserGithub" Gray
+Write-Color "    Email:        $UserGithubEmail" Gray
 if ($configureGitlab) {
-    Write-Host ""
-    Write-Host "  GitLab:" -ForegroundColor Yellow
-    Write-Host "    Server:       $GitlabServer" -ForegroundColor Gray
-    Write-Host "    Username:     $UserGitlab" -ForegroundColor Gray
-    Write-Host "    Email:        $UserGitlabEmail" -ForegroundColor Gray
+    [Console]::WriteLine()
+    Write-Color "  GitLab:" Yellow
+    Write-Color "    Server:       $GitlabServer" Gray
+    Write-Color "    Username:     $UserGitlab" Gray
+    Write-Color "    Email:        $UserGitlabEmail" Gray
 }
-Write-Host ""
-Write-Host "  Git Configuration:" -ForegroundColor Yellow
-Write-Host "    Email:        $GitEmail" -ForegroundColor Green
-Write-Host ""
+[Console]::WriteLine()
+Write-Color "  Git Configuration:" Yellow
+Write-Color "    Email:        $GitEmail" Green
+[Console]::WriteLine()
 
 $confirm = Read-Host "Continue with this configuration? (y/n)"
 if ($confirm -ne 'y') {
@@ -511,48 +529,48 @@ if ($gpgKeyId) {
     }
 }
 
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host "            SSH AND GPG KEY CONFIGURATION                       " -ForegroundColor Yellow
-Write-Host "================================================================" -ForegroundColor Yellow
-Write-Host ""
+[Console]::WriteLine()
+Write-Color "================================================================" Yellow
+Write-Color "            SSH AND GPG KEY CONFIGURATION                       " Yellow
+Write-Color "================================================================" Yellow
+[Console]::WriteLine()
 
 # Display SSH key
 if ($sshPubKey) {
-    Write-Host "SSH Public Key (add to GitHub/GitLab):" -ForegroundColor Cyan
-    Write-Host "----------------------------------------" -ForegroundColor Gray
-    Write-Host $sshPubKey.Trim() -ForegroundColor White
-    Write-Host "----------------------------------------" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "Add this key to:" -ForegroundColor Yellow
-    Write-Host "  - GitHub:  https://github.com/settings/ssh/new" -ForegroundColor Gray
+    Write-Color "SSH Public Key (add to GitHub/GitLab):" Cyan
+    Write-Color "----------------------------------------" Gray
+    Write-Color $sshPubKey.Trim() White
+    Write-Color "----------------------------------------" Gray
+    [Console]::WriteLine()
+    Write-Color "Add this key to:" Yellow
+    Write-Color "  - GitHub:  https://github.com/settings/ssh/new" Gray
     if ($GitlabServer) {
-        Write-Host "  - GitLab:  https://$GitlabServer/-/user_settings/ssh_keys" -ForegroundColor Gray
+        Write-Color "  - GitLab:  https://$GitlabServer/-/user_settings/ssh_keys" Gray
     }
 } else {
     Write-Warn "SSH key not found in WSL"
 }
 
-Write-Host ""
+[Console]::WriteLine()
 
 # Display GPG key
 if ($gpgPubKey) {
-    Write-Host "GPG Public Key (add to GitHub/GitLab for signed commits):" -ForegroundColor Cyan
-    Write-Host "----------------------------------------" -ForegroundColor Gray
-    Write-Host $gpgPubKey -ForegroundColor White
-    Write-Host "----------------------------------------" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "Add this key to:" -ForegroundColor Yellow
-    Write-Host "  - GitHub:  https://github.com/settings/gpg/new" -ForegroundColor Gray
+    Write-Color "GPG Public Key (add to GitHub/GitLab for signed commits):" Cyan
+    Write-Color "----------------------------------------" Gray
+    Write-Color $gpgPubKey White
+    Write-Color "----------------------------------------" Gray
+    [Console]::WriteLine()
+    Write-Color "Add this key to:" Yellow
+    Write-Color "  - GitHub:  https://github.com/settings/gpg/new" Gray
     if ($GitlabServer) {
-        Write-Host "  - GitLab:  https://$GitlabServer/-/user_settings/gpg_keys" -ForegroundColor Gray
+        Write-Color "  - GitLab:  https://$GitlabServer/-/user_settings/gpg_keys" Gray
     }
 } else {
     Write-Info "GPG key not found (optional for signed commits)"
 }
 
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Yellow
+[Console]::WriteLine()
+Write-Color "================================================================" Yellow
 
 # Wait for user confirmation
 $keysAdded = Read-Host "Have you added your SSH key to GitHub (and GitLab if applicable)? (y/n)"
@@ -575,11 +593,11 @@ if ($keysAdded -eq 'y') {
         }
 
         # Clone configuration repositories
-        Write-Host ""
-        Write-Host "================================================================" -ForegroundColor Yellow
-        Write-Host "            REPOSITORY CLONING                                  " -ForegroundColor Yellow
-        Write-Host "================================================================" -ForegroundColor Yellow
-        Write-Host ""
+        [Console]::WriteLine()
+        Write-Color "================================================================" Yellow
+        Write-Color "            REPOSITORY CLONING                                  " Yellow
+        Write-Color "================================================================" Yellow
+        [Console]::WriteLine()
 
         $githubUser = if ($UserGithub) { $UserGithub } else { Read-Host "Enter your GitHub username" }
 
@@ -609,15 +627,15 @@ if ($keysAdded -eq 'y') {
 
     } else {
         Write-Warn "GitHub SSH test failed. Please verify your SSH key was added correctly."
-        Write-Host "Error: $sshTest" -ForegroundColor Red
+        Write-Color "Error: $sshTest" Red
     }
 } else {
     Write-Warn "Skipping SSH verification. Remember to add your keys later!"
-    Write-Host ""
-    Write-Host "To add keys later:" -ForegroundColor Yellow
-    Write-Host "  1. Copy the SSH key above" -ForegroundColor Gray
-    Write-Host "  2. Go to https://github.com/settings/ssh/new" -ForegroundColor Gray
-    Write-Host "  3. Paste and save" -ForegroundColor Gray
+    [Console]::WriteLine()
+    Write-Color "To add keys later:" Yellow
+    Write-Color "  1. Copy the SSH key above" Gray
+    Write-Color "  2. Go to https://github.com/settings/ssh/new" Gray
+    Write-Color "  3. Paste and save" Gray
 }
 
 # ============================================================================
@@ -626,36 +644,36 @@ if ($keysAdded -eq 'y') {
 
 Write-Step "Step 6/6: Setup Complete!"
 
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "                    INSTALLATION COMPLETE                       " -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host ""
+Write-Color "================================================================" Green
+Write-Color "                    INSTALLATION COMPLETE                       " Green
+Write-Color "================================================================" Green
+[Console]::WriteLine()
 
-Write-Host "Port Configuration:" -ForegroundColor Yellow
-Write-Host "  - Windows SSH: port 22" -ForegroundColor Gray
-Write-Host "  - WSL SSH:     port 222" -ForegroundColor Gray
-Write-Host ""
+Write-Color "Port Configuration:" Yellow
+Write-Color "  - Windows SSH: port 22" Gray
+Write-Color "  - WSL SSH:     port 222" Gray
+[Console]::WriteLine()
 
-Write-Host "Installed Windows Apps:" -ForegroundColor Yellow
-Write-Host "  - Tailscale VPN" -ForegroundColor Gray
-Write-Host "  - PowerShell 7" -ForegroundColor Gray
-Write-Host "  - JetBrainsMono Nerd Font" -ForegroundColor Gray
-Write-Host "  - Zed Editor" -ForegroundColor Gray
-Write-Host "  - XPipe" -ForegroundColor Gray
-Write-Host "  - Claude Desktop" -ForegroundColor Gray
-Write-Host "  - Mozilla Firefox" -ForegroundColor Gray
-Write-Host "  - Spotify" -ForegroundColor Gray
-Write-Host ""
+Write-Color "Installed Windows Apps:" Yellow
+Write-Color "  - Tailscale VPN" Gray
+Write-Color "  - PowerShell 7" Gray
+Write-Color "  - JetBrainsMono Nerd Font" Gray
+Write-Color "  - Zed Editor" Gray
+Write-Color "  - XPipe" Gray
+Write-Color "  - Claude Desktop" Gray
+Write-Color "  - Mozilla Firefox" Gray
+Write-Color "  - Spotify" Gray
+[Console]::WriteLine()
 
-Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Restart WSL:        wsl --shutdown" -ForegroundColor Cyan
-Write-Host "  2. Authenticate Tailscale:" -ForegroundColor Cyan
-Write-Host "     - Windows: tailscale up" -ForegroundColor Gray
-Write-Host "     - WSL:     sudo tailscale up" -ForegroundColor Gray
-Write-Host "  3. Set terminal font:  Windows Terminal -> Settings -> Ubuntu -> JetBrainsMono Nerd Font" -ForegroundColor Cyan
-Write-Host ""
+Write-Color "Next Steps:" Yellow
+Write-Color "  1. Restart WSL:        wsl --shutdown" Cyan
+Write-Color "  2. Authenticate Tailscale:" Cyan
+Write-Color "     - Windows: tailscale up" Gray
+Write-Color "     - WSL:     sudo tailscale up" Gray
+Write-Color "  3. Set terminal font:  Windows Terminal -> Settings -> Ubuntu -> JetBrainsMono Nerd Font" Cyan
+[Console]::WriteLine()
 
-Write-Host "Test SSH connections:" -ForegroundColor Yellow
-Write-Host "  - Windows: ssh $env:USERNAME@localhost" -ForegroundColor Gray
-Write-Host "  - WSL:     ssh -p 222 $wslUser@localhost" -ForegroundColor Gray
-Write-Host ""
+Write-Color "Test SSH connections:" Yellow
+Write-Color "  - Windows: ssh $env:USERNAME@localhost" Gray
+Write-Color "  - WSL:     ssh -p 222 $wslUser@localhost" Gray
+[Console]::WriteLine()
