@@ -1688,17 +1688,19 @@ install_powershell() {
     local pwsh_profile_dir="$HOME/.config/powershell"
     mkdir -p "$pwsh_profile_dir"
 
-    # Copy PowerShell profile from dotfiles
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local dotfiles_dir="$script_dir/dotfiles"
+    # Copy PowerShell profile from dotfiles (local or download from GitHub)
+    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
+    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
     local ps_profile_src="$dotfiles_dir/Microsoft.PowerShell_profile.ps1"
     local pwsh_profile="$pwsh_profile_dir/Microsoft.PowerShell_profile.ps1"
 
     if [ -f "$ps_profile_src" ]; then
         cp "$ps_profile_src" "$pwsh_profile"
         print_success "PowerShell profile installed from repo"
+    elif curl -fsSL "$github_base/Microsoft.PowerShell_profile.ps1" -o "$pwsh_profile" 2>/dev/null; then
+        print_success "PowerShell profile downloaded from GitHub"
     else
-        print_error "PowerShell profile not found: $ps_profile_src"
+        print_error "Could not install PowerShell profile (local not found, download failed)"
         return 1
     fi
 
@@ -1776,22 +1778,31 @@ configure_windows_powershell() {
     local win_ps5_dir="$win_docs_dir/WindowsPowerShell"
     mkdir -p "$win_ps7_dir" "$win_ps5_dir"
 
-    # Copy PowerShell profile from dotfiles
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local dotfiles_dir="$script_dir/dotfiles"
+    # Copy PowerShell profile from dotfiles (local or download from GitHub)
+    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
+    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
     local ps_profile="$dotfiles_dir/Microsoft.PowerShell_profile.ps1"
+    local tmp_profile=""
 
+    # Get the profile (local or download)
     if [ -f "$ps_profile" ]; then
-        # Write PowerShell 7 profile
+        # Use local file
         cp "$ps_profile" "$win_ps7_dir/Microsoft.PowerShell_profile.ps1"
-        print_success "Windows PowerShell 7 profile installed from repo"
-
-        # Write Windows PowerShell 5.1 profile
         cp "$ps_profile" "$win_ps5_dir/Microsoft.PowerShell_profile.ps1"
-        print_success "Windows PowerShell 5.1 profile installed from repo"
+        print_success "Windows PowerShell profiles installed from repo"
     else
-        print_error "PowerShell profile not found: $ps_profile"
-        return 1
+        # Download from GitHub
+        tmp_profile=$(mktemp)
+        if curl -fsSL "$github_base/Microsoft.PowerShell_profile.ps1" -o "$tmp_profile" 2>/dev/null; then
+            cp "$tmp_profile" "$win_ps7_dir/Microsoft.PowerShell_profile.ps1"
+            cp "$tmp_profile" "$win_ps5_dir/Microsoft.PowerShell_profile.ps1"
+            rm -f "$tmp_profile"
+            print_success "Windows PowerShell profiles downloaded from GitHub"
+        else
+            rm -f "$tmp_profile"
+            print_error "Could not install Windows PowerShell profile"
+            return 1
+        fi
     fi
 
     # Install Nerd Font on Windows (copy and register)
