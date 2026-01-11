@@ -287,7 +287,7 @@ if (-not $SkipWslInstall) {
 
 Write-Step "Step 2/6: Running WSL Ubuntu Setup Script"
 
-$envVars = "DEBIAN_FRONTEND=noninteractive DOCKER_CHOICE=1 SKIP_SSH_VALIDATE=1 "
+$envVars = "DEBIAN_FRONTEND=noninteractive DOCKER_CHOICE=1 SKIP_SSH_VALIDATE=1 SKIP_KEY_DISPLAY=1 "
 if ($UserFullName) { $envVars += "USER_FULLNAME='$UserFullName' " }
 if ($GitEmail) { $envVars += "USER_EMAIL='$GitEmail' " }
 if ($UserGithubEmail) { $envVars += "USER_GITHUB_EMAIL='$UserGithubEmail' " }

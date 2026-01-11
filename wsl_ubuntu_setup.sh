@@ -44,8 +44,10 @@ export REPO_LIST="${REPO_LIST:-}"
 # Orchestrated Mode Options (PowerShell launcher integration)
 # SKIP_SSH_VALIDATE: Set to "1" to skip SSH validation in orchestrated mode
 # SKIP_GPG_SETUP: Set to "1" to skip GPG setup in orchestrated mode
+# SKIP_KEY_DISPLAY: Set to "1" to skip SSH/GPG key display (PowerShell handles it)
 export SKIP_SSH_VALIDATE="${SKIP_SSH_VALIDATE:-0}"
 export SKIP_GPG_SETUP="${SKIP_GPG_SETUP:-0}"
+export SKIP_KEY_DISPLAY="${SKIP_KEY_DISPLAY:-0}"
 
 # Script Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -2455,6 +2457,12 @@ show_windows_integration_guide() {
 ################################################################################
 
 show_ssh_key_info() {
+    # Skip display if PowerShell bootstrap will handle it (avoids duplication)
+    if [ "$SKIP_KEY_DISPLAY" = "1" ]; then
+        log "INFO" "Skipping SSH/GPG key display (SKIP_KEY_DISPLAY=1, PowerShell handles it)"
+        return 0
+    fi
+
     print_header "SSH Key Information"
 
     local ssh_key_path="${HOME}/.ssh/id_ed25519.pub"

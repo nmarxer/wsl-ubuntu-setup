@@ -40,6 +40,7 @@ WSL Ubuntu Setup: One-click WSL2 development environment with modern shell, lang
 | `COMPANY_JUMPHOST` | SSH jumphost | No | - |
 | `SKIP_SSH_VALIDATE` | Skip SSH validation | No | 0 |
 | `SKIP_GPG_SETUP` | Skip GPG setup | No | 0 |
+| `SKIP_KEY_DISPLAY` | Skip SSH/GPG key display | No | 0 |
 | `DOCKER_CHOICE` | Docker option (1/2/3) | No | (interactive) |
 
 *Required for Git/SSH configuration; prompts interactively if not set.
