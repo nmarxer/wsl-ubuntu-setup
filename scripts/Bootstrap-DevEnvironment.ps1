@@ -690,6 +690,8 @@ Write-Color "  3. Set terminal font:  Windows Terminal -> Settings -> Ubuntu -> 
 Write-Color "  4. Authenticate Git CLIs (in WSL):" Cyan
 Write-Color "     - GitHub:  gh auth login" Gray
 Write-Color "     - GitLab:  glab auth login" Gray
+Write-Color "  5. Sign in to Firefox:  Sync bookmarks, passwords, extensions" Cyan
+Write-Color "  6. Customize Zed:       Settings, themes, extensions" Cyan
 [Console]::WriteLine()
 
 Write-Color "Test SSH connections:" Yellow
