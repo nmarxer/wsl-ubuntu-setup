@@ -522,7 +522,16 @@ if ($gpgKeyId) {
     $gpgKeyId = $gpgKeyId.Trim()
     if ($gpgKeyId -match "^[A-F0-9]+$") {
         try {
-            $gpgPubKey = wsl bash -c "sudo -u $wslUser gpg --armor --export $gpgKeyId 2>/dev/null" 2>$null
+            # Export GPG key to temp file to preserve newlines (PowerShell mangles multi-line WSL output)
+            $gpgTempFile = "/tmp/gpg_pub_key_$([guid]::NewGuid().ToString('N')).asc"
+            wsl bash -c "sudo -u $wslUser gpg --armor --export $gpgKeyId > $gpgTempFile 2>/dev/null" 2>$null
+            # Read the file back via WSL path
+            $wslTempPath = "\\wsl$\$WslDistro$gpgTempFile"
+            if (Test-Path $wslTempPath) {
+                $gpgPubKey = Get-Content -Path $wslTempPath -Raw
+                # Clean up temp file
+                wsl bash -c "rm -f $gpgTempFile" 2>$null
+            }
         } catch {
             # Ignore GPG export errors
         }
@@ -557,7 +566,8 @@ if ($sshPubKey) {
 if ($gpgPubKey) {
     Write-Color "GPG Public Key (add to GitHub/GitLab for signed commits):" Cyan
     Write-Color "----------------------------------------" Gray
-    Write-Color $gpgPubKey White
+    # Output each line separately to ensure proper cursor positioning
+    $gpgPubKey -split "`r?`n" | ForEach-Object { [Console]::WriteLine($_) }
     Write-Color "----------------------------------------" Gray
     [Console]::WriteLine()
     Write-Color "Add this key to:" Yellow
