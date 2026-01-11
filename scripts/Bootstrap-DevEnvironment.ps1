@@ -687,6 +687,9 @@ Write-Color "  2. Authenticate Tailscale:" Cyan
 Write-Color "     - Windows: tailscale up" Gray
 Write-Color "     - WSL:     sudo tailscale up" Gray
 Write-Color "  3. Set terminal font:  Windows Terminal -> Settings -> Ubuntu -> JetBrainsMono Nerd Font" Cyan
+Write-Color "  4. Authenticate Git CLIs (in WSL):" Cyan
+Write-Color "     - GitHub:  gh auth login" Gray
+Write-Color "     - GitLab:  glab auth login" Gray
 [Console]::WriteLine()
 
 Write-Color "Test SSH connections:" Yellow
