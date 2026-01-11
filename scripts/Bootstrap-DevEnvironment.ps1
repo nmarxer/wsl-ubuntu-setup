@@ -311,7 +311,8 @@ Write-Host ""
 
 $wslDistroName = $WslDistro
 if ($WslDistro -eq "Ubuntu") {
-    $installedDistros = wsl --list --quiet 2>$null
+    # WSL list output contains null bytes and CR/LF - clean them up
+    $installedDistros = (wsl --list --quiet 2>$null) -replace '\0','' -split "`r?`n" | Where-Object { $_ -ne '' }
     $ubuntuDistro = $installedDistros | Where-Object { $_ -match "^Ubuntu" } | Select-Object -First 1
     if ($ubuntuDistro) { $wslDistroName = $ubuntuDistro.Trim() }
 }
@@ -451,10 +452,10 @@ Write-Step "Step 5/6: SSH and GPG Key Configuration"
 # Get WSL user - try multiple methods
 $wslUser = $null
 
-# Method 1: Check who owns /home directories
-$homeUsers = wsl bash -c "ls /home 2>/dev/null" 2>$null
-if ($homeUsers) {
-    $wslUser = ($homeUsers -split '\s+' | Where-Object { $_ -ne '' } | Select-Object -First 1)
+# Method 1: Use whoami command (most reliable)
+$whoamiResult = wsl bash -c "whoami 2>/dev/null" 2>$null
+if ($whoamiResult) {
+    $wslUser = $whoamiResult.Trim() -replace '\0',''
 }
 
 # Method 2: Fallback to Windows username lowercase

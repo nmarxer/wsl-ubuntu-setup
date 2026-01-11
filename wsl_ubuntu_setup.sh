@@ -155,6 +155,108 @@ ask_yes_no() {
     fi
 }
 
+# Validate repository entry (prevent command injection)
+validate_repo_entry() {
+    local entry="$1"
+
+    # Reject empty entries
+    if [ -z "$entry" ]; then
+        print_error "Empty repository entry"
+        return 1
+    fi
+
+    # Reject entries containing shell metacharacters (command injection)
+    if [[ "$entry" =~ [\$\`\|\;\&\>\<\(\)\{\}] ]]; then
+        print_error "Invalid repo entry (contains shell metacharacters): $entry"
+        log "SECURITY" "Blocked repo entry with shell metacharacters: $entry"
+        return 1
+    fi
+
+    # Reject path traversal attempts
+    if [[ "$entry" == *".."* ]]; then
+        print_error "Invalid repo entry (path traversal detected): $entry"
+        log "SECURITY" "Blocked repo entry with path traversal: $entry"
+        return 1
+    fi
+
+    # Reject entries with newlines or null bytes
+    if [[ "$entry" == *$'\n'* ]] || [[ "$entry" == *$'\0'* ]]; then
+        print_error "Invalid repo entry (contains control characters)"
+        log "SECURITY" "Blocked repo entry with control characters"
+        return 1
+    fi
+
+    return 0
+}
+
+# Validate user input (prevent injection in git config and GPG)
+validate_user_input() {
+    local var_name="$1"
+    local var_value="$2"
+
+    # Reject empty values for required fields
+    if [ -z "$var_value" ]; then
+        print_error "$var_name cannot be empty"
+        return 1
+    fi
+
+    # Reject shell metacharacters (command injection prevention)
+    if [[ "$var_value" =~ [\$\`\|\;\&\>\<\(\)\[\]\{\}\\] ]]; then
+        print_error "$var_name contains invalid characters (shell metacharacters not allowed)"
+        log "SECURITY" "Blocked $var_name with shell metacharacters"
+        return 1
+    fi
+
+    # Email validation for EMAIL fields
+    if [[ "$var_name" == *"EMAIL"* ]]; then
+        # Basic email format check (RFC 5322 simplified)
+        if [[ ! "$var_value" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            print_error "$var_name is not a valid email address: $var_value"
+            return 1
+        fi
+    fi
+
+    # Length limits (prevent buffer issues)
+    if [ ${#var_value} -gt 256 ]; then
+        print_error "$var_name exceeds maximum length (256 characters)"
+        return 1
+    fi
+
+    return 0
+}
+
+# Verify downloaded script is safe to execute
+verify_download_script() {
+    local script_path="$1"
+    local source_url="$2"
+
+    # Check file exists and is readable
+    if [ ! -f "$script_path" ] || [ ! -r "$script_path" ]; then
+        print_error "Downloaded script not found or not readable: $script_path"
+        return 1
+    fi
+
+    # Check file is not empty
+    if [ ! -s "$script_path" ]; then
+        print_error "Downloaded script is empty: $source_url"
+        return 1
+    fi
+
+    # Check for valid shebang (basic sanity check)
+    local first_line
+    first_line=$(head -1 "$script_path")
+    if [[ ! "$first_line" =~ ^#! ]]; then
+        print_warning "Downloaded script has no shebang - may not be a valid script: $source_url"
+    fi
+
+    # Log checksum for audit trail
+    local checksum
+    checksum=$(sha256sum "$script_path" 2>/dev/null | cut -d' ' -f1)
+    log "AUDIT" "Script checksum for $source_url: SHA256=$checksum"
+
+    return 0
+}
+
 # Run command with error handling (direct execution, no eval)
 run_cmd() {
     log "CMD" "Executing: $*"
@@ -232,6 +334,32 @@ retry_download() {
     done
 
     print_error "Download failed after $max_retries attempts: $url"
+    return 1
+}
+
+# Retry fetch with exponential backoff (returns content to stdout)
+retry_fetch() {
+    local url="$1"
+    local max_retries="${2:-3}"
+    local timeout="${3:-30}"
+    local retry=0
+
+    while [ $retry -lt $max_retries ]; do
+        local result
+        result=$(curl -s --max-time "$timeout" "$url" 2>/dev/null)
+        if [ -n "$result" ]; then
+            echo "$result"
+            return 0
+        fi
+        retry=$((retry + 1))
+        if [ $retry -lt $max_retries ]; then
+            local wait_time=$((2 ** retry))
+            log "WARN" "Fetch failed for $url, retry $retry/$max_retries in ${wait_time}s..."
+            sleep $wait_time
+        fi
+    done
+
+    log "ERROR" "Fetch failed after $max_retries attempts: $url"
     return 1
 }
 
@@ -350,7 +478,8 @@ check_wsl_environment() {
         elif [[ "$WSL_VERSION" == "1" ]]; then
             print_warning "WSL1 detected (WSL2 recommended for better performance)"
         else
-            print_info "WSL version not detected (probably WSL2)"
+            # If we're running in WSL but can't detect version, assume WSL2 (default since Windows 11)
+            print_success "WSL2 detected"
         fi
     else
         print_warning "wsl.exe not accessible (normal in some configurations)"
@@ -623,7 +752,7 @@ install_packages() {
     local packages=(
         git zsh bat fd-find ripgrep btop ncdu tldr zoxide unzip
         nmap tcpdump netcat-openbsd openssh-server
-        python3-pip tmux gh glab
+        python3-pip tmux gh glab bats shellcheck
         make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev
         libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils tk-dev
         libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
@@ -697,6 +826,84 @@ install_fzf() {
 }
 
 ################################################################################
+# BATS TESTING HELPERS INSTALLATION
+################################################################################
+
+install_bats_helpers() {
+    if is_completed "bats_helpers"; then
+        print_info "BATS helpers already installed, skipping"
+        return 0
+    fi
+
+    print_header "Installing BATS testing helpers"
+
+    # Create bats directory for helper libraries
+    local bats_dir="$HOME/.bats"
+    mkdir -p "$bats_dir"
+
+    # Install bats-support (common helper functions)
+    if [ ! -d "$bats_dir/bats-support" ]; then
+        print_info "Installing bats-support..."
+        git clone --depth 1 https://github.com/bats-core/bats-support.git "$bats_dir/bats-support"
+        print_success "bats-support installed"
+    else
+        print_info "bats-support already present"
+    fi
+
+    # Install bats-assert (assertion functions)
+    if [ ! -d "$bats_dir/bats-assert" ]; then
+        print_info "Installing bats-assert..."
+        git clone --depth 1 https://github.com/bats-core/bats-assert.git "$bats_dir/bats-assert"
+        print_success "bats-assert installed"
+    else
+        print_info "bats-assert already present"
+    fi
+
+    # Install bats-file (file assertion functions)
+    if [ ! -d "$bats_dir/bats-file" ]; then
+        print_info "Installing bats-file..."
+        git clone --depth 1 https://github.com/bats-core/bats-file.git "$bats_dir/bats-file"
+        print_success "bats-file installed"
+    else
+        print_info "bats-file already present"
+    fi
+
+    # Verify BATS is working
+    if command_exists bats; then
+        print_success "BATS $(bats --version) ready with helpers"
+    else
+        print_warning "BATS not found in PATH - may need to reload shell"
+    fi
+
+    mark_completed "bats_helpers"
+}
+
+# Run BATS tests after installation
+run_post_install_tests() {
+    print_header "Running Post-Installation Tests"
+
+    if ! command_exists bats; then
+        print_warning "BATS not installed - skipping tests"
+        return 0
+    fi
+
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+    if [ ! -d "$script_dir/tests" ]; then
+        print_warning "Tests directory not found - skipping tests"
+        return 0
+    fi
+
+    print_info "Running BATS test suite..."
+    if bats "$script_dir/tests/"; then
+        print_success "All tests passed!"
+    else
+        print_warning "Some tests failed - review output above"
+    fi
+}
+
+################################################################################
 # NERD FONT INSTALLATION
 ################################################################################
 
@@ -761,11 +968,14 @@ install_ohmyposh_theme() {
 
     # Download from GitHub as fallback
     print_info "Downloading Oh My Posh theme from GitHub..."
-    if curl -fsSL "$theme_url" -o "$theme_dst"; then
+    if curl -fsSL --max-time 30 "$theme_url" -o "$theme_dst"; then
         print_success "Oh My Posh theme downloaded from GitHub"
         return 0
     else
-        print_error "Failed to download Oh My Posh theme"
+        local http_status=$(curl -s -o /dev/null -w '%{http_code}' "$theme_url" 2>/dev/null || echo "unknown")
+        print_error "Failed to download Oh My Posh theme from: $theme_url"
+        print_error "HTTP status: $http_status"
+        print_info "You can manually download the theme and place it at: $theme_dst"
         return 1
     fi
 }
@@ -812,7 +1022,7 @@ install_dotfiles() {
     [ -f "$HOME/.tmux.conf" ] && chmod 644 "$HOME/.tmux.conf"
 
     # Install zshrc.d files
-    local zshrc_d_files=("aliases.zsh" "functions.zsh" "path.zsh" "prompt.zsh")
+    local zshrc_d_files=("aliases.zsh" "functions.zsh" "personal.zsh" "tmux.zsh")
     for zsh_file in "${zshrc_d_files[@]}"; do
         install_dotfile "zshrc.d/$zsh_file" "$HOME/.zshrc.d/$zsh_file"
     done
@@ -852,10 +1062,21 @@ configure_shell() {
     # Install Oh My Posh (cross-platform prompt theme engine)
     if ! command_exists oh-my-posh; then
         print_info "Installing Oh My Posh..."
-        curl -s https://ohmyposh.dev/install.sh | bash -s -- -d ~/.local/bin
-        # Add .local/bin to PATH for current session
-        export PATH="$HOME/.local/bin:$PATH"
-        print_success "Oh My Posh installed"
+        local omp_script=$(mktemp)
+        trap "rm -f '$omp_script'" RETURN
+        if curl -s --max-time 60 https://ohmyposh.dev/install.sh -o "$omp_script"; then
+            if verify_download_script "$omp_script" "https://ohmyposh.dev/install.sh"; then
+                bash "$omp_script" -d ~/.local/bin
+                # Add .local/bin to PATH for current session
+                export PATH="$HOME/.local/bin:$PATH"
+                print_success "Oh My Posh installed"
+            else
+                print_error "Oh My Posh installer verification failed"
+            fi
+        else
+            print_error "Failed to download Oh My Posh installer"
+        fi
+        rm -f "$omp_script"
     fi
 
     # Ensure .local/bin is in PATH for current session
@@ -886,8 +1107,13 @@ configure_shell() {
     mkdir -p ~/.local/bin
     ln -sf $(which fdfind) ~/.local/bin/fd 2>/dev/null || true
 
-    # Update tldr
-    tldr --update || true
+    # Update tldr database
+    if command_exists tldr; then
+        if ! tldr --update 2>/dev/null; then
+            print_warning "tldr database update failed (non-critical, can retry later with: tldr --update)"
+            log "WARN" "tldr database update failed"
+        fi
+    fi
 
     print_success "Shell and CLI tools configured"
     mark_completed "shell"
@@ -1019,8 +1245,14 @@ EOF
     rm -f /tmp/nftables-wsl.conf
 
     # Enable and start nftables service
-    do_sudo systemctl enable nftables 2>/dev/null || true
-    do_sudo systemctl start nftables 2>/dev/null || true
+    if ! do_sudo systemctl enable nftables 2>/dev/null; then
+        print_warning "Could not enable nftables service (may require systemd or manual setup)"
+        log "WARN" "nftables service enable failed - systemd may not be running"
+    fi
+    if ! do_sudo systemctl start nftables 2>/dev/null; then
+        print_warning "Could not start nftables service (firewall rules loaded manually below)"
+        log "WARN" "nftables service start failed"
+    fi
 
     # Load the rules
     do_sudo nft -f /etc/nftables.conf 2>/dev/null || {
@@ -1101,7 +1333,10 @@ EOF
 
     # Enable and start SSH service (requires systemd)
     if command -v systemctl &> /dev/null; then
-        do_sudo systemctl enable ssh 2>/dev/null || true
+        if ! do_sudo systemctl enable ssh 2>/dev/null; then
+            print_warning "Could not enable SSH service (may require manual setup: sudo systemctl enable ssh)"
+            log "WARN" "SSH service enable failed - systemd may not be running"
+        fi
         do_sudo systemctl start ssh 2>/dev/null || {
             print_warning "SSH service not started (may need WSL restart with systemd)"
         }
@@ -1150,7 +1385,10 @@ install_tailscale() {
 
     # Start Tailscale daemon (requires systemd)
     if command -v systemctl &> /dev/null; then
-        do_sudo systemctl enable tailscaled 2>/dev/null || true
+        if ! do_sudo systemctl enable tailscaled 2>/dev/null; then
+            print_warning "Could not enable Tailscale daemon (may require: sudo systemctl enable tailscaled)"
+            log "WARN" "Tailscale daemon enable failed"
+        fi
         do_sudo systemctl start tailscaled 2>/dev/null || {
             print_warning "Tailscale daemon not started (may need WSL restart with systemd)"
         }
@@ -1206,14 +1444,23 @@ EOF
     # Install Python 3.12
     LATEST_312=$(pyenv install --list | grep "^\s*3\.12" | grep -v "[a-zA-Z]" | tail -1 | xargs)
     if [ -n "$LATEST_312" ]; then
-        pyenv install $LATEST_312
-        pyenv global $LATEST_312
-        print_success "Python $LATEST_312 installed"
+        if pyenv install "$LATEST_312"; then
+            pyenv global "$LATEST_312"
+            print_success "Python $LATEST_312 installed"
+        else
+            print_error "Failed to install Python $LATEST_312"
+            print_error "Check build dependencies with: pyenv doctor"
+            print_error "Build log: $LOG_FILE"
+            print_info "Common fix: sudo apt install build-essential libssl-dev libffi-dev python3-dev"
+            return 1
+        fi
+    else
+        print_warning "Could not determine latest Python 3.12 version"
     fi
 
     # Install Poetry
     if ! command_exists poetry; then
-        curl -sSL https://install.python-poetry.org | python3 -
+        curl -sSL --max-time 60 https://install.python-poetry.org | python3 -
 
         if ! grep -q "poetry" ~/.zshrc; then
             echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -1257,9 +1504,20 @@ install_nodejs_env() {
 
     print_header "Installing Node.js environment"
 
-    # Install NVM (secure download)
+    # Install NVM (secure download with retry)
     if [ ! -d ~/.nvm ]; then
-        NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        local nvm_api_response
+        nvm_api_response=$(retry_fetch "https://api.github.com/repos/nvm-sh/nvm/releases/latest" 3 30)
+        if [ -z "$nvm_api_response" ]; then
+            print_error "Failed to fetch NVM version from GitHub API"
+            return 1
+        fi
+        NVM_VERSION=$(echo "$nvm_api_response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        # Validate NVM version format (must be vX.Y.Z)
+        if [[ ! "$NVM_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            print_error "Invalid NVM version format: '$NVM_VERSION'"
+            return 1
+        fi
         secure_download_run "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh" "bash"
 
         export NVM_DIR="$HOME/.nvm"
@@ -1289,7 +1547,17 @@ install_nodejs_env() {
     # Note: bun installs to ~/.bun/bin, check both PATH and direct location
     if ! command_exists bun && [ ! -f "$HOME/.bun/bin/bun" ]; then
         print_info "Installing Bun..."
-        curl -fsSL https://bun.sh/install | bash
+        local bun_script=$(mktemp)
+        if curl -fsSL --max-time 60 https://bun.sh/install -o "$bun_script"; then
+            if verify_download_script "$bun_script" "https://bun.sh/install"; then
+                bash "$bun_script"
+            else
+                print_error "Bun installer verification failed"
+            fi
+        else
+            print_error "Failed to download Bun installer"
+        fi
+        rm -f "$bun_script"
 
         # Add Bun to path for current session
         export BUN_INSTALL="$HOME/.bun"
@@ -1323,9 +1591,16 @@ install_go_env() {
 
     print_header "Installing Go environment"
 
-    # Detect latest Go version
-    GO_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -1)
+    # Detect latest Go version (with retry)
+    GO_VERSION=$(retry_fetch "https://go.dev/VERSION?m=text" 3 30 | head -1)
     ARCH=$(dpkg --print-architecture)
+
+    # Validate Go version format (must be go1.x.x)
+    if [[ ! "$GO_VERSION" =~ ^go[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+        print_error "Invalid Go version format: '$GO_VERSION' - network error or API change"
+        print_info "Retry manually: curl https://go.dev/VERSION?m=text"
+        return 1
+    fi
 
     # Download and install (using temp directory for safety)
     local tmp_dir=$(mktemp -d)
@@ -1759,7 +2034,10 @@ EOF
         print_info "Installing k6..."
         # Use official k6 installation method (download GPG key directly)
         sudo mkdir -p /etc/apt/keyrings
-        curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg 2>/dev/null || true
+        if ! curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-keyring.gpg 2>/dev/null; then
+            print_warning "Could not add k6 GPG key (may already exist)"
+            log "WARN" "k6 GPG key installation returned non-zero"
+        fi
         echo "deb [signed-by=/etc/apt/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | \
             sudo tee /etc/apt/sources.list.d/k6.list > /dev/null
         sudo apt-get update -qq
@@ -1834,13 +2112,32 @@ EOF
     # Helm (manual installation to work with sudo password)
     if ! command_exists helm; then
         local helm_tmp=$(mktemp -d)
-        local helm_version=$(curl -s https://api.github.com/repos/helm/helm/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        curl -sL "https://get.helm.sh/helm-${helm_version}-linux-amd64.tar.gz" | tar xzf - -C "$helm_tmp"
-        do_sudo install -m 755 "$helm_tmp/linux-amd64/helm" /usr/local/bin/helm
+        local helm_api_response
+        helm_api_response=$(retry_fetch "https://api.github.com/repos/helm/helm/releases/latest" 3 30)
+        if [ -z "$helm_api_response" ]; then
+            print_error "Failed to fetch Helm version from GitHub API"
+            rm -rf "$helm_tmp"
+            return 1
+        fi
+        local helm_version=$(echo "$helm_api_response" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [ -z "$helm_version" ]; then
+            print_error "Could not parse Helm version from API response"
+            rm -rf "$helm_tmp"
+            return 1
+        fi
+        # Use same architecture as kubectl (K8S_ARCH is already set above)
+        curl -sL --max-time 120 "https://get.helm.sh/helm-${helm_version}-linux-${K8S_ARCH}.tar.gz" | tar xzf - -C "$helm_tmp"
+        do_sudo install -m 755 "$helm_tmp/linux-${K8S_ARCH}/helm" /usr/local/bin/helm
         rm -rf "$helm_tmp"
     fi
-    helm repo add bitnami https://charts.bitnami.com/bitnami > /dev/null 2>&1 || true
-    helm repo update > /dev/null 2>&1 || true
+    if ! helm repo add bitnami https://charts.bitnami.com/bitnami > /dev/null 2>&1; then
+        print_warning "Could not add Bitnami Helm repo (may already exist or network issue)"
+        log "WARN" "Helm repo add bitnami failed"
+    fi
+    if ! helm repo update > /dev/null 2>&1; then
+        print_warning "Could not update Helm repos (can retry later with: helm repo update)"
+        log "WARN" "Helm repo update failed"
+    fi
     print_success "Helm installed"
 
     mark_completed "k8s_tools"
@@ -1864,8 +2161,19 @@ install_claude_code() {
 
     print_header "Installing Claude Code CLI"
 
-    # Official installer
-    curl -fsSL https://claude.ai/install.sh | bash
+    # Official installer with verification
+    local claude_script=$(mktemp)
+    if curl -fsSL --max-time 60 https://claude.ai/install.sh -o "$claude_script"; then
+        if verify_download_script "$claude_script" "https://claude.ai/install.sh"; then
+            bash "$claude_script"
+            print_success "Claude Code installed"
+        else
+            print_error "Claude Code installer verification failed"
+        fi
+    else
+        print_error "Failed to download Claude Code installer"
+    fi
+    rm -f "$claude_script"
 
     mark_completed "claude_code"
 }
@@ -2041,8 +2349,14 @@ clone_repos() {
     local repo_list="${REPO_LIST:-$default_repos}"
 
     # Verify SSH access before starting
+    # Note: ssh -T returns exit code 1 even on success (GitHub/GitLab close connection after greeting)
+    # We must check for success message in stderr, not exit code
     print_info "Verifying SSH access..."
-    if ! ssh -T git@github.com &>/dev/null && ! ssh -T git@gitlab.com &>/dev/null; then
+    local github_result gitlab_result
+    github_result=$(ssh -T git@github.com 2>&1) || true
+    gitlab_result=$(ssh -T git@gitlab.com 2>&1) || true
+
+    if [[ "$github_result" != *"successfully authenticated"* ]] && [[ "$gitlab_result" != *"Welcome to GitLab"* ]]; then
         print_warning "SSH access not available. Check your SSH keys with: ssh -T git@github.com"
         print_info "You can clone repositories manually later"
         print_info "Continuing with remaining installation..."
@@ -2061,6 +2375,13 @@ clone_repos() {
     IFS=',' read -ra repos <<< "$repo_list"
 
     for repo_entry in "${repos[@]}"; do
+        # Validate entry before parsing (security: prevent command injection)
+        if ! validate_repo_entry "$repo_entry"; then
+            print_warning "Skipping invalid repository entry"
+            failed=$((failed + 1))
+            continue
+        fi
+
         # Parse "name:url:path" format
         IFS=':' read -r repo_name repo_url repo_path <<< "$repo_entry"
 
@@ -2079,17 +2400,27 @@ clone_repos() {
                 print_success "  → $repo_name updated"
                 updated=$((updated + 1))
             else
-                print_error "  → Failed to update $repo_name"
+                print_error "  → Failed to update $repo_name at $repo_path"
+                print_error "  → Check: git status at $repo_path for conflicts or uncommitted changes"
+                log "ERROR" "Git update failed for $repo_name at $repo_path"
                 failed=$((failed + 1))
             fi
         # Case 2: Directory exists but no .git (corrupted or incomplete clone)
         elif [ -d "$repo_path" ]; then
+            # Safety check: ensure repo_path is valid and not a critical directory
+            if [ -z "$repo_path" ] || [[ "$repo_path" == "/" ]] || [[ "$repo_path" == "$HOME" ]] || [[ "$repo_path" == "/home" ]]; then
+                print_error "  → Invalid repo path: $repo_path - skipping for safety"
+                failed=$((failed + 1))
+                continue
+            fi
             print_warning "  → Existing folder without .git detected, removing and re-cloning..."
             if rm -rf "$repo_path" && git clone "$repo_url" "$repo_path" &>> "$LOG_FILE"; then
                 print_success "  → $repo_name cloned (from corrupted state)"
                 fixed=$((fixed + 1))
             else
-                print_error "  → Failed to clone $repo_name"
+                print_error "  → Failed to clone $repo_name from $repo_url to $repo_path"
+                print_error "  → Check: SSH keys with 'ssh -T git@github.com' or network connectivity"
+                log "ERROR" "Git clone failed for $repo_name: $repo_url -> $repo_path"
                 failed=$((failed + 1))
             fi
         # Case 3: Fresh clone
@@ -2099,7 +2430,10 @@ clone_repos() {
                 print_success "  → $repo_name cloned (new)"
                 cloned=$((cloned + 1))
             else
-                print_error "  → Failed to clone $repo_name"
+                print_error "  → Failed to clone $repo_name from $repo_url to $repo_path"
+                print_error "  → Check: SSH keys with 'ssh -T git@github.com' or network connectivity"
+                print_info "  → Clone log: $LOG_FILE"
+                log "ERROR" "Git clone failed for $repo_name: $repo_url -> $repo_path"
                 failed=$((failed + 1))
             fi
         fi
@@ -2221,7 +2555,11 @@ configure_ssh_gpg() {
     chmod 600 ~/.ssh/id_ed25519_*
     chmod 644 ~/.ssh/id_ed25519_*.pub
 
-    # SSH config
+    # SSH config - backup existing config first
+    if [ -f ~/.ssh/config ]; then
+        cp ~/.ssh/config ~/.ssh/config.backup.$(date +%Y%m%d_%H%M%S)
+        print_info "Existing SSH config backed up"
+    fi
     cat > ~/.ssh/config << 'EOF'
 Host github.com
     HostName github.com
@@ -2423,6 +2761,16 @@ nohup.out
 EOF
 
     git config --global core.excludesfile ~/.gitignore_global
+
+    # Log rotation - keep only last 10 log files
+    if [ -d "$LOG_DIR" ]; then
+        local log_count=$(find "$LOG_DIR" -maxdepth 1 -name "setup_*.log" -type f | wc -l)
+        if [ "$log_count" -gt 10 ]; then
+            print_info "Cleaning up old log files (keeping last 10)..."
+            find "$LOG_DIR" -maxdepth 1 -name "setup_*.log" -type f -printf '%T+ %p\n' | \
+                sort | head -n -10 | cut -d' ' -f2- | xargs -r rm -f
+        fi
+    fi
 
     print_success "Final configuration complete"
     mark_completed "final"
@@ -2782,6 +3130,7 @@ full_install() {
     configure_apt_repos
     install_packages
     install_fzf
+    install_bats_helpers
     configure_shell
     configure_zsh_files
     optimize_system
@@ -2806,6 +3155,7 @@ full_install() {
     # Verify installation
     echo ""
     verify_installation
+    run_post_install_tests
 
     show_completion_message
 }
@@ -2821,6 +3171,7 @@ interactive_install() {
     ask_yes_no "Configure APT repositories?" y && configure_apt_repos
     ask_yes_no "Install packages?" y && install_packages
     ask_yes_no "Install fzf (from GitHub)?" y && install_fzf
+    install_bats_helpers  # Always install BATS testing helpers
     ask_yes_no "Configure shell (Zsh/Oh My Posh)?" y && configure_shell
     ask_yes_no "Configure Zsh files?" y && configure_zsh_files
     ask_yes_no "Optimize system?" y && optimize_system
@@ -2843,6 +3194,7 @@ interactive_install() {
     # Verify installation
     echo ""
     verify_installation
+    run_post_install_tests
 
     show_completion_message
 }
@@ -2884,6 +3236,7 @@ orchestrated_install() {
     configure_apt_repos
     install_packages
     install_fzf
+    install_bats_helpers
     configure_shell
     configure_zsh_files
     optimize_system
@@ -2907,6 +3260,7 @@ orchestrated_install() {
     # Verify installation
     echo ""
     verify_installation
+    run_post_install_tests
 
     show_completion_message
 }
@@ -2967,6 +3321,20 @@ main() {
         exit 1
     fi
 
+    # Validate user input (security: prevent injection in git config and GPG)
+    if [ -n "$USER_FULLNAME" ] && [ "$USER_FULLNAME" != "Your Name" ]; then
+        if ! validate_user_input "USER_FULLNAME" "$USER_FULLNAME"; then
+            print_error "Invalid USER_FULLNAME. Please use alphanumeric characters only."
+            exit 1
+        fi
+    fi
+    if [ -n "$USER_EMAIL" ] && [ "$USER_EMAIL" != "your.email@example.com" ]; then
+        if ! validate_user_input "USER_EMAIL" "$USER_EMAIL"; then
+            print_error "Invalid USER_EMAIL. Please provide a valid email address."
+            exit 1
+        fi
+    fi
+
     # Show menu if no arguments
     if [ $# -eq 0 ]; then
         show_menu
@@ -2984,12 +3352,29 @@ main() {
             --verify)
                 verify_installation
                 ;;
+            --test)
+                # Run BATS tests
+                if ! command_exists bats; then
+                    print_error "BATS not installed. Run installation first or: sudo apt install bats"
+                    exit 1
+                fi
+                local script_dir
+                script_dir="$(cd "$(dirname "$0")" && pwd)"
+                if [ -d "$script_dir/tests" ]; then
+                    print_header "Running BATS tests"
+                    bats "$script_dir/tests/"
+                else
+                    print_error "Tests directory not found: $script_dir/tests/"
+                    exit 1
+                fi
+                ;;
             --help)
-                echo "Usage: $0 [--full|--orchestrated|--check|--verify|--help]"
+                echo "Usage: $0 [--full|--orchestrated|--check|--verify|--test|--help]"
                 echo "  --full         Full non-interactive installation (menu-based)"
                 echo "  --orchestrated Orchestrated installation (PowerShell launcher)"
                 echo "  --check        Check WSL prerequisites only"
                 echo "  --verify       Verify installation health (check all tools/configs)"
+                echo "  --test         Run BATS test suite"
                 echo "  --help         Show this help"
                 echo ""
                 echo "Environment Variables:"

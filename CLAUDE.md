@@ -11,14 +11,14 @@ WSL Ubuntu Setup: One-click WSL2 development environment with modern shell, lang
 | Orchestrated | `./wsl_ubuntu_setup.sh --orchestrated` |
 | Check Prerequisites | `./wsl_ubuntu_setup.sh --check` |
 | Verify Installation | `./wsl_ubuntu_setup.sh --verify` |
-| Run Tests | `bats tests/` |
+| Run Tests | `./wsl_ubuntu_setup.sh --test` or `bats tests/` |
 | Lint Script | `shellcheck wsl_ubuntu_setup.sh` |
 
 ## Architecture
 
 | Layer | Technology | Files |
 |-------|------------|-------|
-| Main Script | Bash | `wsl_ubuntu_setup.sh` (2700+ lines, checkpoint-based) |
+| Main Script | Bash | `wsl_ubuntu_setup.sh` (3370+ lines, checkpoint-based) |
 | Shell Config | Zsh + Oh My Posh | `dotfiles/zshrc`, `dotfiles/zshrc.d/*.zsh` |
 | Prompt Theme | Oh My Posh | `dotfiles/ohmyposh/catppuccin_mocha.omp.json` |
 | Terminal | tmux | `dotfiles/tmux.conf` with Windows clipboard |
@@ -63,7 +63,7 @@ The script uses these checkpoints for idempotency:
 
 ```
 wsl_environment → systemd_enable → backup → system_update → apt_repos →
-packages → fzf → shell → zsh_files → optimizations → nftables →
+packages → fzf → bats_helpers → shell → zsh_files → optimizations → nftables →
 python_env → nodejs_env → go_env → powershell → containers →
 k8s_tools → claude_code → modern_cli_tools → tmux → ssh_validate →
 ssh_gpg → clone_repos → final
@@ -82,6 +82,7 @@ Reset all: `rm ~/.wsl_ubuntu_setup_logs/.checkpoint`
 | `install_python_env()` | `python_env` | pyenv, Python 3.12, Poetry, uv |
 | `install_nodejs_env()` | `nodejs_env` | nvm, Node.js LTS, pnpm, Bun |
 | `install_go_env()` | `go_env` | Latest Go, GOPATH setup |
+| `install_bats_helpers()` | `bats_helpers` | BATS testing helpers (bats-support, bats-assert, bats-file) |
 | `configure_shell()` | `shell` | Zsh, Oh My Posh, eza, Rust/Cargo |
 | `verify_installation()` | - | Post-install health check |
 
@@ -114,13 +115,17 @@ retry_download "url" "dest"    # Download with retry and backoff
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (after installation)
+./wsl_ubuntu_setup.sh --test
+
+# Or run directly with bats
 bats tests/
 
 # Run specific test file
 bats tests/test_helpers.bats
 bats tests/test_dotfiles.bats
 bats tests/test_security.bats
+bats tests/test_integration.bats
 
 # Lint
 shellcheck wsl_ubuntu_setup.sh
@@ -138,6 +143,7 @@ zsh -n dotfiles/zshrc
 | Oh My Posh theme | `~/.config/ohmyposh/catppuccin_mocha.omp.json` |
 | tmux config | `~/.tmux.conf` |
 | SSH keys | `~/.ssh/id_ed25519_*` |
+| BATS helpers | `~/.bats/{bats-support,bats-assert,bats-file}` |
 | Logs | `~/.wsl_ubuntu_setup_logs/` |
 | Checkpoints | `~/.wsl_ubuntu_setup_logs/.checkpoint` |
 | Projects | `~/projects/{personal,work,experiments}` |
