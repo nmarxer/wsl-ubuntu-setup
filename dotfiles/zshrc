@@ -30,6 +30,9 @@ bindkey '^[[3~' delete-char
 # === PATH ===
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
+# === GPG (Commit Signing) ===
+export GPG_TTY=$(tty)
+
 # === OH MY POSH (Prompt Theme) ===
 if command -v oh-my-posh &> /dev/null; then
     eval "$(oh-my-posh init zsh --config ~/.config/ohmyposh/catppuccin_mocha.omp.json)"

@@ -2106,6 +2106,11 @@ configure_ssh_gpg() {
                 git config --global tag.gpgsign true
                 print_success "GPG signing configured with key $gpg_key_id"
             fi
+            # Configure GPG agent for WSL (fixes pinentry issues in tmux/screen)
+            mkdir -p ~/.gnupg
+            chmod 700 ~/.gnupg
+            copy_or_download_dotfile "gpg-agent.conf" "$HOME/.gnupg/gpg-agent.conf" --chmod 600
+            gpgconf --kill gpg-agent 2>/dev/null || true
         fi
 
         mark_completed "ssh_gpg"
@@ -2194,6 +2199,13 @@ EOF
     git config --global user.signingkey "$GPG_KEY_ID"
     git config --global commit.gpgsign true
     git config --global tag.gpgsign true
+
+    # Configure GPG agent for WSL (fixes pinentry issues in tmux/screen)
+    mkdir -p ~/.gnupg
+    chmod 700 ~/.gnupg
+    copy_or_download_dotfile "gpg-agent.conf" "$HOME/.gnupg/gpg-agent.conf" --force --chmod 600
+    # Restart gpg-agent to pick up new config
+    gpgconf --kill gpg-agent 2>/dev/null || true
 
     print_success "GPG and Git configured"
 
