@@ -23,7 +23,9 @@ set -o pipefail  # Catch errors in pipes
 export USER_FULLNAME="${USER_FULLNAME:-Your Name}"
 export USER_EMAIL="${USER_EMAIL:-your.email@example.com}"
 export USER_GITHUB="${USER_GITHUB:-yourusername}"
+export USER_GITHUB_EMAIL="${USER_GITHUB_EMAIL:-$USER_EMAIL}"
 export USER_GITLAB="${USER_GITLAB:-yourusername}"
+export USER_GITLAB_EMAIL="${USER_GITLAB_EMAIL:-$USER_EMAIL}"
 
 # Optional Corporate Configuration
 export COMPANY_GITLAB="${COMPANY_GITLAB:-}"
@@ -363,23 +365,26 @@ check_wsl_environment() {
     fi
 
     # Check disk space (25GB minimum)
-    # In WSL2, / is on ext4.vhdx which grows dynamically up to Windows free space
-    # We check the actual available space in the WSL virtual disk
-    local available_space=$(df -BG / 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$4); print $4}')
-    local total_space=$(df -BG / 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$2); print $2}')
-    local used_space=$(df -BG / 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$3); print $3}')
+    # WSL2's ext4.vhdx grows dynamically, so df / shows misleading values
+    # Check Windows host C: drive via /mnt/c for actual available space
+    local win_available=$(df -BG /mnt/c 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$4); print $4}')
+    local win_total=$(df -BG /mnt/c 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$2); print $2}')
+    local win_used=$(df -BG /mnt/c 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$3); print $3}')
+
+    # Also get WSL disk usage for reference
+    local wsl_used=$(df -BG / 2>/dev/null | awk 'NR==2 {gsub(/G/,"",$3); print $3}')
 
     # Validate the value is numeric
-    if [[ "$available_space" =~ ^[0-9]+$ ]]; then
-        if [ "$available_space" -ge 25 ]; then
-            print_success "Disk space sufficient: ${available_space}GB available (${used_space}GB used of ${total_space}GB total)"
+    if [[ "$win_available" =~ ^[0-9]+$ ]]; then
+        if [ "$win_available" -ge 25 ]; then
+            print_success "Disk space sufficient: ${win_available}GB available on Windows (${win_used}GB used of ${win_total}GB total, WSL using ${wsl_used}GB)"
         else
-            print_error "Insufficient disk space: ${available_space}GB available (25GB minimum required)"
+            print_error "Insufficient disk space: ${win_available}GB available on Windows (25GB minimum required)"
             has_error=1
         fi
     else
-        print_warning "Could not determine disk space (WSL filesystem check)"
-        print_info "Continuing with setup - ensure sufficient disk space"
+        print_error "Could not determine Windows disk space via /mnt/c"
+        has_error=1
     fi
 
     # Check internet connectivity
@@ -2111,22 +2116,39 @@ configure_ssh_gpg() {
         return 0
     fi
 
-    # Check if Git is already configured
-    local git_name=$(git config --global user.name 2>/dev/null)
-    local git_email=$(git config --global user.email 2>/dev/null)
+    # Always configure Git with user-provided values
+    local current_git_name=$(git config --global user.name 2>/dev/null)
+    local current_git_email=$(git config --global user.email 2>/dev/null)
 
-    if [ -n "$git_name" ] && [ -n "$git_email" ]; then
-        print_success "Git already configured: $git_name <$git_email>"
-
-        # Check for existing SSH keys
-        if [ -f ~/.ssh/id_ed25519 ] || [ -f ~/.ssh/id_ed25519_github ] || [ -f ~/.ssh/id_rsa ]; then
-            print_success "Existing SSH keys detected"
-            ls -la ~/.ssh/id_* 2>/dev/null | head -5
+    if [ -n "$current_git_name" ] && [ -n "$current_git_email" ]; then
+        if [ "$current_git_name" = "$USER_FULLNAME" ] && [ "$current_git_email" = "$USER_EMAIL" ]; then
+            print_success "Git already configured correctly: $current_git_name <$current_git_email>"
+        else
+            print_info "Updating Git configuration from '$current_git_name <$current_git_email>' to '$USER_FULLNAME <$USER_EMAIL>'"
         fi
+    fi
+
+    # Always set git config with user-provided values
+    git config --global user.name "$USER_FULLNAME"
+    git config --global user.email "$USER_EMAIL"
+    print_success "Git configured: $USER_FULLNAME <$USER_EMAIL>"
+
+    # Check for existing SSH keys
+    if [ -f ~/.ssh/id_ed25519 ] || [ -f ~/.ssh/id_ed25519_github ] || [ -f ~/.ssh/id_rsa ]; then
+        print_success "Existing SSH keys detected"
+        ls -la ~/.ssh/id_* 2>/dev/null | head -5
 
         # Check for existing GPG keys
-        if gpg --list-secret-keys "$git_email" &>/dev/null; then
-            print_success "Existing GPG key detected for $git_email"
+        if gpg --list-secret-keys "$USER_EMAIL" &>/dev/null; then
+            print_success "Existing GPG key detected for $USER_EMAIL"
+            # Configure GPG signing if key exists
+            local gpg_key_id=$(gpg --list-secret-keys --keyid-format=long "$USER_EMAIL" 2>/dev/null | grep sec | awk '{print $2}' | cut -d'/' -f2 | head -1)
+            if [ -n "$gpg_key_id" ]; then
+                git config --global user.signingkey "$gpg_key_id"
+                git config --global commit.gpgsign true
+                git config --global tag.gpgsign true
+                print_success "GPG signing configured with key $gpg_key_id"
+            fi
         fi
 
         mark_completed "ssh_gpg"
@@ -2161,8 +2183,8 @@ configure_ssh_gpg() {
         fi
     }
 
-    generate_ssh_key ~/.ssh/id_ed25519_github "${USER_EMAIL}-github"
-    generate_ssh_key ~/.ssh/id_ed25519_gitlab "${USER_EMAIL}-gitlab"
+    generate_ssh_key ~/.ssh/id_ed25519_github "${USER_GITHUB_EMAIL}"
+    generate_ssh_key ~/.ssh/id_ed25519_gitlab "${USER_GITLAB_EMAIL}"
     generate_ssh_key ~/.ssh/id_ed25519_work "${USER_EMAIL}-work"
 
     chmod 600 ~/.ssh/id_ed25519_*

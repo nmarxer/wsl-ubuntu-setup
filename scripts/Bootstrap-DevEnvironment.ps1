@@ -21,18 +21,24 @@
     Clear WSL installation checkpoints for a fresh install
 .PARAMETER UserFullName
     Git author name for WSL setup
-.PARAMETER UserEmail
-    Git/SSH email for WSL setup
 .PARAMETER UserGithub
     GitHub username for WSL setup
+.PARAMETER UserGithubEmail
+    GitHub email for WSL setup
 .PARAMETER UserGitlab
     GitLab username for WSL setup (optional)
+.PARAMETER UserGitlabEmail
+    GitLab email for WSL setup (optional)
 .PARAMETER GitlabServer
-    Corporate GitLab server URL (optional, e.g., gitlab.company.com)
+    GitLab server URL (optional, e.g., gitlab.company.com, defaults to gitlab.com)
+.PARAMETER UseGitlabForGit
+    Use GitLab email for git config instead of GitHub email
 .EXAMPLE
     .\Bootstrap-DevEnvironment.ps1
 .EXAMPLE
-    .\Bootstrap-DevEnvironment.ps1 -UserFullName "John Doe" -UserEmail "john@example.com" -UserGithub "johndoe"
+    .\Bootstrap-DevEnvironment.ps1 -UserFullName "John Doe" -UserGithub "johndoe" -UserGithubEmail "john@example.com"
+.EXAMPLE
+    .\Bootstrap-DevEnvironment.ps1 -UserFullName "John Doe" -UserGithub "johndoe" -UserGithubEmail "john@personal.com" -UserGitlab "jdoe" -UserGitlabEmail "john.doe@company.com" -GitlabServer "gitlab.company.com" -UseGitlabForGit
 .NOTES
     Run as Administrator in PowerShell.
     Requires internet connection.
@@ -47,10 +53,12 @@ param(
     [switch]$SkipWindowsApps,
     [switch]$ResetCheckpoints,
     [string]$UserFullName = "",
-    [string]$UserEmail = "",
     [string]$UserGithub = "",
+    [string]$UserGithubEmail = "",
     [string]$UserGitlab = "",
-    [string]$GitlabServer = ""
+    [string]$UserGitlabEmail = "",
+    [string]$GitlabServer = "",
+    [switch]$UseGitlabForGit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -104,7 +112,7 @@ function Install-WingetApp {
 }
 
 # ============================================================================
-# PHASE 0: User Information Collection
+# PHASE 0: User Information Collection (3-Phase Prompts)
 # ============================================================================
 
 Write-Step "Phase 0: User Configuration"
@@ -114,36 +122,98 @@ Write-Host "       WSL Development Environment Setup                        " -F
 Write-Host "================================================================" -ForegroundColor Yellow
 Write-Host ""
 
-# Collect user information if not provided as parameters
+# --------------------------------------------------------------------------
+# Phase 1: GitHub Configuration (Required)
+# --------------------------------------------------------------------------
+Write-Host "--- Phase 1/3: GitHub Configuration (Required) ---" -ForegroundColor Cyan
+Write-Host ""
+
 if (-not $UserFullName) {
     $UserFullName = Read-Host "Enter your full name (for Git commits)"
-}
-if (-not $UserEmail) {
-    $UserEmail = Read-Host "Enter your email (for Git/SSH)"
 }
 if (-not $UserGithub) {
     $UserGithub = Read-Host "Enter your GitHub username"
 }
-if (-not $UserGitlab) {
-    $gitlabResponse = Read-Host "Enter your GitLab username (or press Enter to skip)"
-    if ($gitlabResponse) { $UserGitlab = $gitlabResponse }
-}
-if (-not $GitlabServer -and $UserGitlab) {
-    $gitlabServerResponse = Read-Host "Enter GitLab server URL (e.g., gitlab.company.com, or press Enter for gitlab.com)"
-    if ($gitlabServerResponse) { $GitlabServer = $gitlabServerResponse }
+if (-not $UserGithubEmail) {
+    $UserGithubEmail = Read-Host "Enter your GitHub email"
 }
 
 Write-Host ""
-Write-Host "Configuration Summary:" -ForegroundColor Cyan
-Write-Host "  Name:     $UserFullName" -ForegroundColor Gray
-Write-Host "  Email:    $UserEmail" -ForegroundColor Gray
-Write-Host "  GitHub:   $UserGithub" -ForegroundColor Gray
-if ($UserGitlab) {
-    Write-Host "  GitLab:   $UserGitlab" -ForegroundColor Gray
-    if ($GitlabServer) {
-        Write-Host "  GitLab Server: $GitlabServer" -ForegroundColor Gray
+
+# --------------------------------------------------------------------------
+# Phase 2: GitLab Decision
+# --------------------------------------------------------------------------
+Write-Host "--- Phase 2/3: GitLab Configuration (Optional) ---" -ForegroundColor Cyan
+Write-Host ""
+
+$configureGitlab = $false
+if ($UserGitlab -or $UserGitlabEmail -or $GitlabServer) {
+    # GitLab info provided via parameters
+    $configureGitlab = $true
+} else {
+    $gitlabChoice = Read-Host "Do you want to configure GitLab? (y/n)"
+    $configureGitlab = ($gitlabChoice -eq 'y')
+}
+
+# --------------------------------------------------------------------------
+# Phase 3: GitLab Details (if opted in)
+# --------------------------------------------------------------------------
+if ($configureGitlab) {
+    Write-Host ""
+    Write-Host "--- Phase 3/3: GitLab Details ---" -ForegroundColor Cyan
+    Write-Host ""
+
+    if (-not $GitlabServer) {
+        $gitlabServerResponse = Read-Host "Enter GitLab server URL (e.g., gitlab.company.com, or press Enter for gitlab.com)"
+        if ($gitlabServerResponse) {
+            $GitlabServer = $gitlabServerResponse
+        } else {
+            $GitlabServer = "gitlab.com"
+        }
+    }
+    if (-not $UserGitlab) {
+        $UserGitlab = Read-Host "Enter your GitLab username"
+    }
+    if (-not $UserGitlabEmail) {
+        $UserGitlabEmail = Read-Host "Enter your GitLab email"
+    }
+
+    # Ask which email to use for git config
+    if (-not $UseGitlabForGit) {
+        Write-Host ""
+        Write-Host "Which email should Git use for commits?" -ForegroundColor Yellow
+        Write-Host "  1. GitHub email: $UserGithubEmail" -ForegroundColor Gray
+        Write-Host "  2. GitLab email: $UserGitlabEmail" -ForegroundColor Gray
+        $gitEmailChoice = Read-Host "Choose (1 or 2, default: 1)"
+        if ($gitEmailChoice -eq '2') {
+            $UseGitlabForGit = $true
+        }
     }
 }
+
+# Determine which email to use for git config
+$GitEmail = if ($UseGitlabForGit -and $UserGitlabEmail) { $UserGitlabEmail } else { $UserGithubEmail }
+
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "Configuration Summary:" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Full Name:      $UserFullName" -ForegroundColor Gray
+Write-Host ""
+Write-Host "  GitHub:" -ForegroundColor Yellow
+Write-Host "    Username:     $UserGithub" -ForegroundColor Gray
+Write-Host "    Email:        $UserGithubEmail" -ForegroundColor Gray
+if ($configureGitlab) {
+    Write-Host ""
+    Write-Host "  GitLab:" -ForegroundColor Yellow
+    Write-Host "    Server:       $GitlabServer" -ForegroundColor Gray
+    Write-Host "    Username:     $UserGitlab" -ForegroundColor Gray
+    Write-Host "    Email:        $UserGitlabEmail" -ForegroundColor Gray
+}
+Write-Host ""
+Write-Host "  Git Configuration:" -ForegroundColor Yellow
+Write-Host "    Email:        $GitEmail" -ForegroundColor Green
 Write-Host ""
 
 $confirm = Read-Host "Continue with this configuration? (y/n)"
@@ -201,9 +271,11 @@ Write-Step "Step 2/6: Running WSL Ubuntu Setup Script"
 
 $envVars = "DEBIAN_FRONTEND=noninteractive DOCKER_CHOICE=1 SKIP_SSH_VALIDATE=1 "
 if ($UserFullName) { $envVars += "USER_FULLNAME='$UserFullName' " }
-if ($UserEmail) { $envVars += "USER_EMAIL='$UserEmail' " }
+if ($GitEmail) { $envVars += "USER_EMAIL='$GitEmail' " }
+if ($UserGithubEmail) { $envVars += "USER_GITHUB_EMAIL='$UserGithubEmail' " }
 if ($UserGithub) { $envVars += "USER_GITHUB='$UserGithub' " }
 if ($UserGitlab) { $envVars += "USER_GITLAB='$UserGitlab' " }
+if ($UserGitlabEmail) { $envVars += "USER_GITLAB_EMAIL='$UserGitlabEmail' " }
 if ($GitlabServer) { $envVars += "COMPANY_GITLAB='$GitlabServer' " }
 
 # Reset checkpoints if requested (for fresh install)
@@ -391,18 +463,29 @@ foreach ($uncPath in $uncPaths) {
     }
 }
 
-# Method 2: WSL command with explicit user
+# Method 2: WSL bash command with proper error suppression
 if (-not $sshPubKey) {
-    $sshKeyOutput = wsl -u $wslUser -- cat "/home/$wslUser/.ssh/id_ed25519.pub" 2>$null
+    # Use bash -c with stderr suppression inside bash to avoid PowerShell error output
+    $sshKeyOutput = $null
+    try {
+        $sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519.pub 2>/dev/null" 2>$null
+    } catch {
+        # Ignore errors
+    }
     if ($sshKeyOutput -and $sshKeyOutput -like "ssh-*") {
         $sshPubKey = if ($sshKeyOutput -is [array]) { ($sshKeyOutput -join "").Trim() } else { $sshKeyOutput.ToString().Trim() }
-        Write-Info "SSH key found via wsl -u"
+        Write-Info "SSH key found via WSL bash"
     }
 }
 
-# Method 3: WSL bash command
+# Method 3: Try GitHub-specific key
 if (-not $sshPubKey) {
-    $sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519.pub 2>/dev/null"
+    $sshKeyOutput = $null
+    try {
+        $sshKeyOutput = wsl bash -c "cat /home/$wslUser/.ssh/id_ed25519_github.pub 2>/dev/null" 2>$null
+    } catch {
+        # Ignore errors
+    }
     if ($sshKeyOutput -and $sshKeyOutput -like "ssh-*") {
         $sshPubKey = if ($sshKeyOutput -is [array]) { ($sshKeyOutput -join "").Trim() } else { $sshKeyOutput.ToString().Trim() }
         Write-Info "SSH key found via wsl bash"
@@ -411,11 +494,20 @@ if (-not $sshPubKey) {
 
 # Get GPG key from WSL (run as the actual user)
 $gpgPubKey = $null
-$gpgKeyId = wsl bash -c "sudo -u $wslUser gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E 'sec\s+' | head -1 | sed 's/.*\/\([A-F0-9]\+\).*/\1/'" 2>$null
+$gpgKeyId = $null
+try {
+    $gpgKeyId = wsl bash -c "sudo -u $wslUser gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E 'sec\s+' | head -1 | sed 's/.*\/\([A-F0-9]\+\).*/\1/'" 2>$null
+} catch {
+    # Ignore GPG errors
+}
 if ($gpgKeyId) {
     $gpgKeyId = $gpgKeyId.Trim()
     if ($gpgKeyId -match "^[A-F0-9]+$") {
-        $gpgPubKey = wsl bash -c "sudo -u $wslUser gpg --armor --export $gpgKeyId 2>/dev/null"
+        try {
+            $gpgPubKey = wsl bash -c "sudo -u $wslUser gpg --armor --export $gpgKeyId 2>/dev/null" 2>$null
+        } catch {
+            # Ignore GPG export errors
+        }
     }
 }
 
