@@ -2178,8 +2178,8 @@ EOF
     chmod 600 ~/.ssh/config
     print_success "SSH keys generated"
 
-    # Generate GPG key
-    print_info "Generating GPG key (passphrase required)..."
+    # Generate GPG key (no passphrase for seamless CI/automation signing)
+    print_info "Generating GPG key (no passphrase for automation)..."
     gpg --batch --generate-key << EOF
 Key-Type: RSA
 Key-Length: 4096
@@ -2188,6 +2188,7 @@ Subkey-Length: 4096
 Name-Real: $USER_FULLNAME
 Name-Email: $USER_EMAIL
 Expire-Date: 2y
+%no-protection
 %commit
 EOF
 
