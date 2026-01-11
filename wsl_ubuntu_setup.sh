@@ -739,18 +739,33 @@ install_nerd_font() {
 ################################################################################
 
 install_ohmyposh_theme() {
-    # Copy Oh My Posh theme from repo (dotfiles/ohmyposh/catppuccin_mocha.omp.json)
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local theme_src="$script_dir/dotfiles/ohmyposh/catppuccin_mocha.omp.json"
+    # Install Oh My Posh theme - try local first, then download from GitHub
     local theme_dst="$HOME/.config/ohmyposh/catppuccin_mocha.omp.json"
+    local theme_url="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles/ohmyposh/catppuccin_mocha.omp.json"
 
     mkdir -p "$HOME/.config/ohmyposh"
 
+    # Skip if theme already exists
+    if [ -f "$theme_dst" ]; then
+        print_success "Oh My Posh theme already installed"
+        return 0
+    fi
+
+    # Try local file first (using global SCRIPT_DIR)
+    local theme_src="$SCRIPT_DIR/dotfiles/ohmyposh/catppuccin_mocha.omp.json"
     if [ -f "$theme_src" ]; then
         cp "$theme_src" "$theme_dst"
-        print_success "Oh My Posh theme installed from repo"
+        print_success "Oh My Posh theme installed from local repo"
+        return 0
+    fi
+
+    # Download from GitHub as fallback
+    print_info "Downloading Oh My Posh theme from GitHub..."
+    if curl -fsSL "$theme_url" -o "$theme_dst"; then
+        print_success "Oh My Posh theme downloaded from GitHub"
+        return 0
     else
-        print_error "Theme file not found: $theme_src"
+        print_error "Failed to download Oh My Posh theme"
         return 1
     fi
 }
@@ -760,36 +775,47 @@ install_ohmyposh_theme() {
 ################################################################################
 
 install_dotfiles() {
-    # Install dotfiles from repo (dotfiles/ directory)
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local dotfiles_dir="$script_dir/dotfiles"
+    # Install dotfiles from repo or download from GitHub
+    local dotfiles_dir="$SCRIPT_DIR/dotfiles"
+    local github_base="https://raw.githubusercontent.com/nmarxer/wsl-ubuntu-setup/main/dotfiles"
 
-    if [ ! -d "$dotfiles_dir" ]; then
-        print_error "Dotfiles directory not found: $dotfiles_dir"
-        return 1
-    fi
-
-    # Create .zshrc.d directory
+    # Create directories
     mkdir -p ~/.zshrc.d
 
-    # Copy zshrc
-    if [ -f "$dotfiles_dir/zshrc" ]; then
-        cp "$dotfiles_dir/zshrc" ~/.zshrc
-        print_success ".zshrc installed from repo"
-    fi
+    # Helper to install a dotfile (local or download)
+    install_dotfile() {
+        local src_name="$1"
+        local dst_path="$2"
+        local local_src="$dotfiles_dir/$src_name"
+        local github_url="$github_base/$src_name"
 
-    # Copy zshrc.d files
-    if [ -d "$dotfiles_dir/zshrc.d" ]; then
-        cp "$dotfiles_dir/zshrc.d/"*.zsh ~/.zshrc.d/
-        print_success ".zshrc.d/* installed from repo"
-    fi
+        # Skip if destination already exists
+        if [ -f "$dst_path" ]; then
+            print_info "$dst_path already exists, skipping"
+            return 0
+        fi
 
-    # Copy tmux.conf
-    if [ -f "$dotfiles_dir/tmux.conf" ]; then
-        cp "$dotfiles_dir/tmux.conf" ~/.tmux.conf
-        chmod 644 ~/.tmux.conf
-        print_success ".tmux.conf installed from repo"
-    fi
+        if [ -f "$local_src" ]; then
+            cp "$local_src" "$dst_path"
+            print_success "$dst_path installed from local repo"
+        elif curl -fsSL "$github_url" -o "$dst_path" 2>/dev/null; then
+            print_success "$dst_path downloaded from GitHub"
+        else
+            print_warning "Could not install $dst_path"
+            return 1
+        fi
+    }
+
+    # Install main dotfiles
+    install_dotfile "zshrc" "$HOME/.zshrc"
+    install_dotfile "tmux.conf" "$HOME/.tmux.conf"
+    [ -f "$HOME/.tmux.conf" ] && chmod 644 "$HOME/.tmux.conf"
+
+    # Install zshrc.d files
+    local zshrc_d_files=("aliases.zsh" "functions.zsh" "path.zsh" "prompt.zsh")
+    for zsh_file in "${zshrc_d_files[@]}"; do
+        install_dotfile "zshrc.d/$zsh_file" "$HOME/.zshrc.d/$zsh_file"
+    done
 }
 
 ################################################################################
@@ -827,8 +853,13 @@ configure_shell() {
     if ! command_exists oh-my-posh; then
         print_info "Installing Oh My Posh..."
         curl -s https://ohmyposh.dev/install.sh | bash -s -- -d ~/.local/bin
+        # Add .local/bin to PATH for current session
+        export PATH="$HOME/.local/bin:$PATH"
         print_success "Oh My Posh installed"
     fi
+
+    # Ensure .local/bin is in PATH for current session
+    [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && export PATH="$HOME/.local/bin:$PATH"
 
     # Install Nerd Font (required for Oh My Posh icons)
     install_nerd_font
