@@ -2870,17 +2870,14 @@ orchestrated_install() {
     enable_systemd
     create_backup
 
-    # Phase 2: SSH/GPG Configuration + SSH Validation
+    # Phase 2: SSH/GPG Configuration
+    # Note: SSH validation and repo cloning are handled by PowerShell AFTER
+    # it displays the keys to the user (so they can add them to GitHub first)
     configure_ssh_gpg
-    if [ "$SKIP_SSH_VALIDATE" != "1" ]; then
-        ssh_validate
-    else
-        print_info "SSH validation skipped (SKIP_SSH_VALIDATE=1)"
-        mark_completed "ssh_validate"
-    fi
-
-    # Phase 3: Clone Repositories
-    clone_repos
+    print_info "SSH validation will be handled by PowerShell after key display"
+    mark_completed "ssh_validate"
+    print_info "Repository cloning will be handled by PowerShell after SSH test"
+    mark_completed "clone_repos"
 
     # Phase 4: Main Environment Setup
     update_system

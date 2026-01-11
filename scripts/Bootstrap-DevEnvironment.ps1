@@ -587,14 +587,19 @@ $keysAdded = Read-Host "Have you added your SSH key to GitHub (and GitLab if app
 
 if ($keysAdded -eq 'y') {
     Write-Info "Testing SSH connection to GitHub..."
-    $sshTest = wsl ssh -T git@github.com -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 2>&1
+    # Capture output and suppress PowerShell error display (ssh -T outputs success to stderr)
+    $ErrorActionPreference = 'SilentlyContinue'
+    $sshTest = wsl bash -c 'ssh -T git@github.com -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 2>&1'
+    $ErrorActionPreference = 'Continue'
     if ($sshTest -match "successfully authenticated|Hi ") {
         Write-Success "GitHub SSH authentication successful!"
 
         # Test GitLab if server provided
         if ($GitlabServer) {
             Write-Info "Testing SSH connection to GitLab..."
-            $gitlabTest = wsl ssh -T "git@$GitlabServer" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 2>&1
+            $ErrorActionPreference = 'SilentlyContinue'
+            $gitlabTest = wsl bash -c "ssh -T git@$GitlabServer -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 2>&1"
+            $ErrorActionPreference = 'Continue'
             if ($gitlabTest -match "Welcome|successfully") {
                 Write-Success "GitLab SSH authentication successful!"
             } else {
