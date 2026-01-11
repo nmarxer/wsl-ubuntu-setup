@@ -1443,10 +1443,10 @@ EOF
     [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init -)"
 
-    # Install Python 3.12
+    # Install Python 3.12 (-s skips if already installed)
     LATEST_312=$(pyenv install --list | grep "^\s*3\.12" | grep -v "[a-zA-Z]" | tail -1 | xargs)
     if [ -n "$LATEST_312" ]; then
-        if pyenv install "$LATEST_312"; then
+        if pyenv install -s "$LATEST_312"; then
             pyenv global "$LATEST_312"
             print_success "Python $LATEST_312 installed"
         else
