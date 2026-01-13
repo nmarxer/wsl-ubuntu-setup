@@ -394,7 +394,8 @@ if (-not $SkipWindowsSSH) {
 # STEP 4: Windows Applications
 # ============================================================================
 
-if (-not $SkipWindowsApps) {
+# if (-not $SkipWindowsApps) {
+if (-not $True) {
     Write-Step "Step 4/6: Installing Windows Applications"
 
     $winget = Get-Command winget -ErrorAction SilentlyContinue
