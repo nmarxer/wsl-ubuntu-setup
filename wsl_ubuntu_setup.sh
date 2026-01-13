@@ -721,7 +721,7 @@ configure_shell() {
 
     # Install Rust (secure download)
     if ! command_exists cargo; then
-        secure_download_run "https://sh.rustup.rs" "sh" "-s -- -y"
+        secure_download_run "https://sh.rustup.rs" "sh" " -- -y"
         source $HOME/.cargo/env
         print_success "Rust installed"
     fi
