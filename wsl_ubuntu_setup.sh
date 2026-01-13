@@ -720,11 +720,11 @@ configure_shell() {
     install_ohmyposh_theme
 
     # Install Rust (secure download)
-    if ! command_exists cargo; then
-        secure_download_run "https://sh.rustup.rs" "sh" " -- -y"
-        source $HOME/.cargo/env
-        print_success "Rust installed"
-    fi
+    #if ! command_exists cargo; then
+    #    secure_download_run "https://sh.rustup.rs" "sh" "-s -- -y"
+    #    source $HOME/.cargo/env
+    #    print_success "Rust installed"
+    #fi
 
     # Install eza
     if ! command_exists eza; then
